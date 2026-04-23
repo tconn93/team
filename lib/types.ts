@@ -5,10 +5,18 @@ export interface Agent {
   description: string;
   systemPrompt: string;
   model: string;
+  provider?: 'openai' | 'anthropic' | 'xai' | 'google' | 'custom';
   color: string;
   skills: string[];
+  tools: string[]; // references to tool names
   status: 'idle' | 'active' | 'offline';
   memorySize: number;
+  guardrails?: {
+    maxTokens?: number;
+    maxCost?: number;
+    requireApproval?: boolean;
+  };
+  isCustom?: boolean;
 }
 
 export interface Subtask {

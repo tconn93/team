@@ -1,5 +1,7 @@
 import { Agent, ToolDefinition, AgentMessage } from './types';
 import { z } from 'zod';
+import { generateStructuredPlan } from './llm/router';
+import type { ApiKeyConfig } from './llm/router';
 
 // Predefined specialized agents
 export const predefinedAgents: Agent[] = [
@@ -9,11 +11,19 @@ export const predefinedAgents: Agent[] = [
     role: 'Orchestrator & Planner',
     description: 'Analyzes goals, creates detailed execution plans, coordinates specialized agents, and synthesizes final deliverables.',
     systemPrompt: `You are the Coordinator Agent. Your job is to break down complex user goals into structured plans with subtasks, assign them to the right specialized agents, monitor progress, and synthesize high-quality deliverables. Always use structured JSON outputs for plans.`,
-    model: 'claude-3.5-sonnet',
+    model: 'grok-3-beta',
     color: '#3b82f6',
     skills: ['planning', 'orchestration', 'synthesis', 'structured-output'],
+    tools: ['web_search', 'code_execution', 'analyze_data'],
+    provider: 'xai',
     status: 'active',
     memorySize: 25,
+    isCustom: false,
+    guardrails: {
+      maxTokens: 8000,
+      maxCost: 5,
+      requireApproval: true,
+    },
   },
   {
     id: 'researcher',
@@ -24,6 +34,7 @@ export const predefinedAgents: Agent[] = [
     model: 'gpt-4o',
     color: '#10b981',
     skills: ['web-search', 'browse-page', 'competitive-analysis', 'data-synthesis'],
+    tools: ['web_search', 'analyze_data'],
     status: 'active',
     memorySize: 40,
   },
@@ -36,6 +47,7 @@ export const predefinedAgents: Agent[] = [
     model: 'claude-3-opus',
     color: '#8b5cf6',
     skills: ['financial-modeling', 'data-analysis', 'chart-generation', 'statistical-analysis'],
+    tools: ['code_execution', 'analyze_data'],
     status: 'active',
     memorySize: 30,
   },
@@ -48,6 +60,7 @@ export const predefinedAgents: Agent[] = [
     model: 'gpt-4o',
     color: '#f59e0b',
     skills: ['copywriting', 'strategy-development', 'presentation-design', 'executive-communication'],
+    tools: ['web_search', 'analyze_data'],
     status: 'active',
     memorySize: 20,
   },
@@ -60,6 +73,7 @@ export const predefinedAgents: Agent[] = [
     model: 'gemini-1.5-pro',
     color: '#ec4899',
     skills: ['charting', 'image-generation', 'ui-design', 'dashboard-creation'],
+    tools: ['generate_image', 'analyze_data', 'code_execution'],
     status: 'active',
     memorySize: 15,
   },

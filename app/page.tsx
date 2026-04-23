@@ -4,8 +4,11 @@ import { useState, useEffect } from 'react';
 import { useTeamForgeStore } from '@/lib/store';
 import { AgentCard } from '@/components/AgentCard';
 import { RunViewer } from '@/components/RunViewer';
-import { Bot, Play, Plus, History, Settings, BarChart3, Users } from 'lucide-react';
+import { AgentEditor } from '@/components/AgentEditor';
+import { SettingsModal } from '@/components/SettingsModal';
+import { Bot, Play, Plus, History, Settings, BarChart3, Users, Edit2 } from 'lucide-react';
 import { predefinedAgents } from '@/lib/agents';
+import type { Agent } from '@/lib/types';
 
 export default function TeamForge() {
   const { 
@@ -14,12 +17,18 @@ export default function TeamForge() {
     currentRun, 
     addRun, 
     setCurrentRun,
-    isExecuting 
+    isExecuting,
+    addAgent,
+    updateAgent,
+    deleteAgent 
   } = useTeamForgeStore();
   
   const [goalInput, setGoalInput] = useState('');
   const [activeTab, setActiveTab] = useState<'missions' | 'fleet' | 'history'>('missions');
   const [showNewMission, setShowNewMission] = useState(false);
+  const [showAgentEditor, setShowAgentEditor] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | undefined>(undefined);
+  const [showSettings, setShowSettings] = useState(false);
 
   const handleLaunchMission = () => {
     if (!goalInput.trim()) return;
@@ -35,6 +44,17 @@ export default function TeamForge() {
       e.preventDefault();
       handleLaunchMission();
     }
+  };
+
+  const openAgentEditor = (agentToEdit?: Agent) => {
+    setEditingAgent(agentToEdit);
+    setShowAgentEditor(true);
+    setActiveTab('fleet');
+  };
+
+  const closeAgentEditor = () => {
+    setShowAgentEditor(false);
+    setEditingAgent(undefined);
   };
 
   const exampleGoals = [
@@ -130,9 +150,12 @@ export default function TeamForge() {
               LAUNCH NEW MISSION
             </button>
             
-            <div className="flex items-center gap-2 text-zinc-400 hover:text-white cursor-pointer">
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 text-zinc-400 hover:text-white cursor-pointer transition-colors"
+            >
               <Settings className="w-4 h-4" />
-            </div>
+            </button>
           </div>
         </div>
 
@@ -145,25 +168,25 @@ export default function TeamForge() {
                 <div className="p-6">
                   <div className="uppercase text-xs tracking-widest text-zinc-500 mb-6">SPECIALIZED AGENTS</div>
                   
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="uppercase text-xs tracking-widest text-zinc-500">SPECIALIZED AGENTS</div>
+                    <button
+                      onClick={() => openAgentEditor()}
+                      className="flex items-center gap-2 text-xs bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl text-white transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> NEW
+                    </button>
+                  </div>
+                  
                   <div className="space-y-4">
                     {agents.map((agent) => (
                       <AgentCard 
                         key={agent.id} 
                         agent={agent} 
-                        onClick={() => {
-                          // Could open agent config modal in full version
-                          alert(`Opening config for ${agent.name} (demo)`);
-                        }}
+                        onClick={() => openAgentEditor(agent)}
                       />
                     ))}
                   </div>
-                  
-                  <button 
-                    onClick={() => alert('In a full implementation this would open the Agent Definition UI with form for system prompt, tools, model selection, guardrails, etc.')}
-                    className="mt-8 w-full py-4 border border-dashed border-zinc-700 hover:border-white/60 rounded-3xl text-sm flex items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors"
-                  >
-                    <Plus className="w-4 h-4" /> CREATE NEW AGENT
-                  </button>
                 </div>
               )}
 
@@ -358,6 +381,19 @@ export default function TeamForge() {
           </div>
         </div>
       )}
+
+      {/* Agent Editor Modal */}
+      <AgentEditor 
+        isOpen={showAgentEditor} 
+        agent={editingAgent} 
+        onClose={closeAgentEditor} 
+      />
+
+      {/* Settings Modal for API Keys */}
+      <SettingsModal 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)} 
+      />
     </div>
   );
 }

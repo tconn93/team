@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { Run, Agent, AgentMessage } from './types';
 import { predefinedAgents } from './agents';
+import type { ApiKeyConfig, Provider } from './llm/router';
 
 interface TeamForgeState {
   agents: Agent[];
   runs: Run[];
   currentRun: Run | null;
   isExecuting: boolean;
+  apiKeys: ApiKeyConfig;
   
   addRun: (goal: string) => void;
   updateRun: (runId: string, updates: Partial<Run>) => void;
@@ -16,13 +18,47 @@ interface TeamForgeState {
   completeRun: (runId: string, outputs?: any[]) => void;
   simulatePlanning: (runId: string, goal: string) => void;
   simulateAgentExecution: (runId: string, plan: any) => void;
+  addAgent: (agent: Agent) => void;
+  updateAgent: (agent: Agent) => void;
+  deleteAgent: (agentId: string) => void;
+  setApiKey: (provider: Provider, key: string) => void;
+  getApiKey: (provider: Provider) => string | undefined;
 }
 
-export const useTeamForgeStore = create<TeamForgeState>((set, get) => ({
-  agents: [...predefinedAgents],
-  runs: [],
-  currentRun: null,
-  isExecuting: false,
+export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
+  // Load custom agents from localStorage
+  let initialAgents = [...predefinedAgents];
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('customAgents');
+    if (saved) {
+      try {
+        const custom = JSON.parse(saved);
+        initialAgents = [...initialAgents, ...custom];
+      } catch (e) {
+        console.error('Failed to load custom agents', e);
+      }
+    }
+  }
+
+  // Load API keys from localStorage
+  let initialApiKeys: ApiKeyConfig = {};
+  if (typeof window !== 'undefined') {
+    const savedKeys = localStorage.getItem('teamforge_api_keys');
+    if (savedKeys) {
+      try {
+        initialApiKeys = JSON.parse(savedKeys);
+      } catch (e) {
+        console.error('Failed to load API keys', e);
+      }
+    }
+  }
+
+  return {
+    agents: initialAgents,
+    runs: [],
+    currentRun: null,
+    isExecuting: false,
+    apiKeys: initialApiKeys,
 
   addRun: (goal: string) => {
     const newRun: Run = {
@@ -139,41 +175,65 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => ({
 
   // Helper for planning simulation
   simulatePlanning: (runId: string, goal: string) => {
-    const { updateRun, addMessageToRun } = get();
+    const { updateRun, addMessageToRun, apiKeys } = get();
     
-    // Coordinator thinking
     const coordinatorMsg: AgentMessage = {
       id: 'msg-plan-' + Date.now(),
       agentId: 'coordinator',
       role: 'assistant',
-      content: `Analyzing mission: "${goal}"\n\nCreating structured execution plan with parallel agent deployment...`,
+      content: `🤖 Analyzing mission with Grok-3: "${goal}"\n\nCreating structured execution plan...`,
       timestamp: new Date(),
     };
     
     addMessageToRun(runId, coordinatorMsg);
-    
+
     setTimeout(async () => {
-      // Import dynamically to avoid circular deps in this mock
-      const { generateExecutionPlan } = await import('./agents');
-      const plan = await generateExecutionPlan(goal);
-      
-      updateRun(runId, { 
-        plan, 
-        status: 'executing' 
-      });
-      
-      const planMsg: AgentMessage = {
-        id: 'msg-plan-complete-' + Date.now(),
-        agentId: 'coordinator',
-        role: 'assistant',
-        content: `✅ Plan generated with ${plan.subtasks.length} subtasks.\nDeploying specialized agents in parallel where possible.`,
-        timestamp: new Date(),
-      };
-      addMessageToRun(runId, planMsg);
-      
-      // Start executing subtasks with simulated delays
-      get().simulateAgentExecution(runId, plan);
-    }, 1800);
+      try {
+        // Import the server action (this runs entirely on the server)
+        const { runMissionServerAction } = await import('../app/actions');
+        
+        const result = await runMissionServerAction(goal, apiKeys);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Mission failed');
+        }
+
+        const plan = result.plan;
+        
+        updateRun(runId, { 
+          plan, 
+          status: 'executing' as const,
+        });
+
+        const completionMsg: AgentMessage = {
+          id: 'msg-complete-' + Date.now(),
+          agentId: 'coordinator',
+          role: 'assistant',
+          content: `🎉 Mission completed using xAI Grok coordination.\n\n${result.summary}`,
+          timestamp: new Date(),
+        };
+        addMessageToRun(runId, completionMsg);
+
+        const mockOutputs = result.deliverables || [
+          { type: 'chart', title: '3-Year Financial Projections' },
+          { type: 'image', title: 'Market Opportunity Visualization', url: 'https://picsum.photos/id/1015/800/500' },
+          { type: 'report', title: 'Complete Go-to-Market Strategy' },
+        ];
+
+        get().completeRun(runId, mockOutputs);
+      } catch (error) {
+        console.error('Mission failed:', error);
+        const errorMsg: AgentMessage = {
+          id: 'msg-error-' + Date.now(),
+          agentId: 'coordinator',
+          role: 'system',
+          content: `❌ Mission failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          timestamp: new Date(),
+        };
+        addMessageToRun(runId, errorMsg);
+        get().completeRun(runId);
+      }
+    }, 1000);
   },
 
   simulateAgentExecution: (runId: string, plan: any) => {
@@ -240,4 +300,80 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => ({
       }, index * 800); // Stagger the starts
     });
   },
-}));
+
+  addAgent: (agent: Agent) => {
+    set((state) => ({
+      agents: [...state.agents, agent],
+    }));
+    // Persist to localStorage
+    if (typeof window !== 'undefined') {
+      const customAgents = JSON.parse(localStorage.getItem('customAgents') || '[]');
+      localStorage.setItem('customAgents', JSON.stringify([...customAgents, agent]));
+    }
+  },
+
+  updateAgent: (updatedAgent: Agent) => {
+    set((state) => ({
+      agents: state.agents.map((a) => (a.id === updatedAgent.id ? updatedAgent : a)),
+      currentRun: state.currentRun 
+        ? {
+            ...state.currentRun,
+            messages: state.currentRun.messages.map((m) =>
+              m.agentId === updatedAgent.id 
+                ? { ...m, agentId: updatedAgent.id } 
+                : m
+            ),
+          }
+        : null,
+    }));
+    
+    if (typeof window !== 'undefined') {
+      const customAgents = JSON.parse(localStorage.getItem('customAgents') || '[]');
+      const updated = customAgents.map((a: Agent) => 
+        a.id === updatedAgent.id ? updatedAgent : a
+      );
+      localStorage.setItem('customAgents', JSON.stringify(updated));
+    }
+  },
+
+  deleteAgent: (agentId: string) => {
+    set((state) => ({
+      agents: state.agents.filter((a) => a.id !== agentId),
+    }));
+    
+    if (typeof window !== 'undefined') {
+      const customAgents = JSON.parse(localStorage.getItem('customAgents') || '[]');
+      localStorage.setItem(
+        'customAgents', 
+        JSON.stringify(customAgents.filter((a: Agent) => a.id !== agentId))
+      );
+    }
+  },
+
+  setApiKey: (provider: Provider, key: string) => {
+    set((state) => {
+      const newKeys = { ...state.apiKeys, [provider]: key };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('teamforge_api_keys', JSON.stringify(newKeys));
+      }
+      return { apiKeys: newKeys };
+    });
+  },
+
+  getApiKey: (provider: Provider) => {
+    const state = get();
+    if (state.apiKeys[provider]) return state.apiKeys[provider];
+    
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('teamforge_api_keys');
+      if (saved) {
+        try {
+          const keys = JSON.parse(saved);
+          return keys[provider];
+        } catch (e) {}
+      }
+    }
+    return undefined;
+  },
+  };
+});
