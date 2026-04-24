@@ -1,7 +1,5 @@
 import { Agent, ToolDefinition, AgentMessage } from './types';
 import { z } from 'zod';
-import { generateStructuredPlan } from './llm/router';
-import type { ApiKeyConfig } from './llm/router';
 
 // Predefined specialized agents
 export const predefinedAgents: Agent[] = [
@@ -168,72 +166,53 @@ export const availableTools: ToolDefinition[] = [
   },
 ];
 
-// Simulated coordinator that generates a plan
-export async function generateExecutionPlan(goal: string): Promise<any> {
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  return {
-    id: 'plan-' + Date.now(),
-    goal,
-    subtasks: [
-      {
-        id: 't1',
-        title: 'Market Research & Opportunity Analysis',
-        description: 'Research the European SaaS market, regulatory environment, target customer segments, and competitive landscape.',
-        assignedAgent: 'researcher',
-        status: 'pending' as const,
-        estimatedTime: 25,
-      },
-      {
-        id: 't2',
-        title: 'Financial Modeling & Projections',
-        description: 'Build comprehensive 3-year financial projections including revenue, costs, CAC, LTV, break-even analysis, and sensitivity models.',
-        assignedAgent: 'analyst',
-        status: 'pending' as const,
-        estimatedTime: 30,
-        dependencies: ['t1'],
-      },
-      {
-        id: 't3',
-        title: 'Go-to-Market Strategy Development',
-        description: 'Develop detailed GTM plan including positioning, pricing, marketing channels, sales strategy, and partnership opportunities.',
-        assignedAgent: 'writer',
-        status: 'pending' as const,
-        estimatedTime: 20,
-      },
-      {
-        id: 't4',
-        title: 'Create Visual Assets & Dashboard',
-        description: 'Generate charts, infographics, mockups, and an interactive executive dashboard summarizing all findings.',
-        assignedAgent: 'visualizer',
-        status: 'pending' as const,
-        estimatedTime: 15,
-        dependencies: ['t2', 't3'],
-      },
-    ],
-    estimatedCost: 12.45,
-    createdAt: new Date(),
-  };
-}
+const agentMessageSets: Record<string, (task: string) => { content: string; role: AgentMessage['role'] }[]> = {
+  researcher: (task) => [
+    { content: `🔍 Starting: ${task}`, role: 'system' },
+    { content: `I'll research this thoroughly using web search and competitive analysis tools.`, role: 'assistant' },
+    { content: `Tool call: web_search(query="${task.substring(0, 50)}")`, role: 'tool' },
+    { content: `Found 23 high-quality sources. Key themes emerging around market sizing, regulatory landscape, and key players.`, role: 'assistant' },
+    { content: `Tool call: analyze_data(dataType="market_data", query="trends and opportunities")`, role: 'tool' },
+    { content: `Research complete. Identified major opportunities and risks. Synthesizing findings for the team.`, role: 'assistant' },
+  ],
+  analyst: (task) => [
+    { content: `📊 Starting: ${task}`, role: 'system' },
+    { content: `I'll build a rigorous financial model using code execution and data analysis.`, role: 'assistant' },
+    { content: `Tool call: code_execution(language="python", code="# Build 3-year financial projections\\nrevenue = [2.45e6, 4.12e6, 6.78e6]")`, role: 'tool' },
+    { content: `Model built. Year 1: $2.45M → Year 3: $6.78M. CAC: $89, LTV: $1,240, ROI: 4.2x.`, role: 'assistant' },
+    { content: `Tool call: analyze_data(dataType="financial", query="sensitivity analysis and break-even")`, role: 'tool' },
+    { content: `Analysis complete. Break-even at month 14. High confidence in projections based on comparable market data.`, role: 'assistant' },
+  ],
+  writer: (task) => [
+    { content: `✍️ Starting: ${task}`, role: 'system' },
+    { content: `I'll draft a compelling strategic narrative backed by the team's research and financial data.`, role: 'assistant' },
+    { content: `Tool call: analyze_data(dataType="strategy", query="positioning and differentiation")`, role: 'tool' },
+    { content: `Positioning analysis complete. Three differentiated angles identified vs. key competitors.`, role: 'assistant' },
+    { content: `Tool call: web_search(query="best practices go-to-market strategy 2026")`, role: 'tool' },
+    { content: `Strategy document drafted. Includes phased rollout plan, pricing framework, and channel recommendations.`, role: 'assistant' },
+  ],
+  visualizer: (task) => [
+    { content: `🎨 Starting: ${task}`, role: 'system' },
+    { content: `I'll create visual assets and an executive dashboard that makes the data immediately clear.`, role: 'assistant' },
+    { content: `Tool call: generate_image(prompt="executive dashboard with market opportunity visualization", style="professional")`, role: 'tool' },
+    { content: `Dashboard mockup generated. Clean, executive-ready layout with key KPIs highlighted.`, role: 'assistant' },
+    { content: `Tool call: code_execution(language="javascript", code="// Render interactive Recharts components")`, role: 'tool' },
+    { content: `All visual assets complete. Charts, infographics, and dashboard are ready for delivery.`, role: 'assistant' },
+  ],
+};
 
 // Simulate agent response streaming
 export function simulateAgentResponse(
-  agentId: string, 
-  task: string, 
+  agentId: string,
+  task: string,
   onMessage: (message: AgentMessage) => void,
   onComplete?: () => void
 ) {
   const agent = predefinedAgents.find(a => a.id === agentId);
   if (!agent) return;
 
-  const messages = [
-    { content: `🔍 Starting analysis for: ${task}`, role: 'system' as const },
-    { content: `I've begun researching and gathering data using web_search and analyze_data tools.`, role: 'assistant' as const },
-    { content: 'Tool call: web_search(query="European SaaS market expansion 2026")', role: 'tool' as const },
-    { content: 'Found 27 relevant sources. Key insights: Growing adoption of no-code tools, GDPR compliance critical, strong demand in Germany/UK/France.', role: 'assistant' as const },
-    { content: 'Using code_execution tool to build financial model...', role: 'tool' as const },
-    { content: `Completed task. Here are my key findings and recommendations.`, role: 'assistant' as const },
-  ];
+  const messageSet = agentMessageSets[agentId] ?? agentMessageSets['researcher'];
+  const messages = messageSet(task);
 
   let index = 0;
   const interval = setInterval(() => {

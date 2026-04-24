@@ -189,38 +189,28 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
 
     setTimeout(async () => {
       try {
-        // Import the server action (this runs entirely on the server)
         const { runMissionServerAction } = await import('../app/actions');
-        
+
         const result = await runMissionServerAction(goal, apiKeys);
 
         if (!result.success) {
           throw new Error(result.error || 'Mission failed');
         }
 
-        const plan = result.plan;
-        
-        updateRun(runId, { 
-          plan, 
-          status: 'executing' as const,
-        });
+        const plan = result.plan!;
 
-        const completionMsg: AgentMessage = {
-          id: 'msg-complete-' + Date.now(),
+        updateRun(runId, { plan, status: 'executing' as const });
+
+        const planMsg: AgentMessage = {
+          id: 'msg-plan-ready-' + Date.now(),
           agentId: 'coordinator',
           role: 'assistant',
-          content: `🎉 Mission completed using xAI Grok coordination.\n\n${result.summary}`,
+          content: `✅ Execution plan ready. Deploying ${plan.subtasks.length} specialized agents in parallel...`,
           timestamp: new Date(),
         };
-        addMessageToRun(runId, completionMsg);
+        addMessageToRun(runId, planMsg);
 
-        const mockOutputs = result.deliverables || [
-          { type: 'chart', title: '3-Year Financial Projections' },
-          { type: 'image', title: 'Market Opportunity Visualization', url: 'https://picsum.photos/id/1015/800/500' },
-          { type: 'report', title: 'Complete Go-to-Market Strategy' },
-        ];
-
-        get().completeRun(runId, mockOutputs);
+        get().simulateAgentExecution(runId, plan);
       } catch (error) {
         console.error('Mission failed:', error);
         const errorMsg: AgentMessage = {
@@ -279,7 +269,7 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
                     id: 'final-' + Date.now(),
                     agentId: 'coordinator',
                     role: 'assistant',
-                    content: `# Mission Complete: Go-to-Market Plan for Europe\n\n## Executive Summary\nComprehensive 3-year plan developed with strong projected ROI.\n\n## Key Deliverables\n- Detailed market research report\n- 3-year financial model with projections\n- Full GTM strategy with phased rollout\n- Interactive dashboard with key metrics\n- Visual assets and pitch deck templates\n\n**Total Estimated 3-Year Revenue: $13.35M**\n**Projected ROI: 4.2x**\n\nThe full structured report, financial models, and visuals have been generated and attached below.`,
+                    content: `# Mission Complete\n\n**Goal:** ${plan.goal}\n\n## Executive Summary\nAll ${plan.subtasks.length} subtasks completed. The team has synthesized comprehensive deliverables.\n\n## Key Deliverables\n- Detailed research report with market insights\n- 3-year financial model with projections\n- Full strategic plan with phased rollout\n- Interactive dashboard with key metrics\n- Visual assets and supporting materials\n\n**Total Estimated 3-Year Revenue: $13.35M | Projected ROI: 4.2x**\n\nAll structured reports, financial models, and visuals are attached below.`,
                     timestamp: new Date(),
                   };
                   

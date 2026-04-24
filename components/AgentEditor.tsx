@@ -74,10 +74,8 @@ export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
     setFormData(agent ? agentToFormState(agent) : getDefaultFormData());
   }, [isOpen, agent?.id]);
 
-  // Only show providers that have API keys configured
-  const configuredProviders = (['openai', 'anthropic', 'xai', 'google'] as Provider[]).filter(
-    (p) => getApiKey(p) || process.env[`${p.toUpperCase()}_API_KEY`]
-  );
+  const allProviders: Provider[] = ['openai', 'anthropic', 'xai', 'google'];
+  const configuredProviders = allProviders.filter((p) => getApiKey(p));
 
   // Load models when provider changes (dynamic fetch for xAI)
   useEffect(() => {
@@ -212,28 +210,29 @@ export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
                   value={formData.provider}
                   onChange={(e) => {
                     const newProvider = e.target.value as Provider;
-                    setFormData({ 
-                      ...formData, 
+                    setFormData({
+                      ...formData,
                       provider: newProvider,
-                      // Auto-select first available model for the provider
-                      model: modelOptions[newProvider]?.[0] || 'grok-3-beta'
+                      model: modelOptions[newProvider]?.[0] || 'grok-3-beta',
                     });
                   }}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-blue-500"
                 >
-                  {configuredProviders.length > 0 ? (
-                    configuredProviders.map((p) => {
-                      const label = p === 'xai' ? 'xAI (Grok)' : 
-                                   p === 'openai' ? 'OpenAI' : 
-                                   p === 'anthropic' ? 'Anthropic' : 'Google Gemini';
-                      return <option key={p} value={p}>{label}</option>;
-                    })
-                  ) : (
-                    <option value="">Configure API keys in Settings first</option>
-                  )}
+                  {allProviders.map((p) => {
+                    const label =
+                      p === 'xai' ? 'xAI (Grok)' :
+                      p === 'openai' ? 'OpenAI' :
+                      p === 'anthropic' ? 'Anthropic' : 'Google Gemini';
+                    const configured = configuredProviders.includes(p);
+                    return (
+                      <option key={p} value={p}>
+                        {label}{configured ? ' ✓' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {configuredProviders.length === 0 && (
-                  <p className="text-amber-400 text-xs mt-2">⚠️ No providers have API keys configured. Go to Settings first.</p>
+                  <p className="text-zinc-500 text-xs mt-2">Add API keys in Settings to enable real LLM calls.</p>
                 )}
               </div>
 

@@ -166,8 +166,6 @@ export default function TeamForge() {
             <div className="w-96 border-r border-zinc-800 bg-zinc-900 overflow-auto">
               {activeTab === 'fleet' && (
                 <div className="p-6">
-                  <div className="uppercase text-xs tracking-widest text-zinc-500 mb-6">SPECIALIZED AGENTS</div>
-                  
                   <div className="flex justify-between items-center mb-6">
                     <div className="uppercase text-xs tracking-widest text-zinc-500">SPECIALIZED AGENTS</div>
                     <button
@@ -272,11 +270,11 @@ export default function TeamForge() {
                     <div className="text-xs uppercase tracking-widest text-zinc-500 mb-4 px-1">TRY THESE MISSIONS</div>
                     <div className="grid grid-cols-1 gap-3">
                       {exampleGoals.map((example, index) => (
-                        <div 
+                        <div
                           key={index}
                           onClick={() => {
-                            setGoalInput(example);
-                            setTimeout(() => handleLaunchMission(), 80);
+                            addRun(example);
+                            setActiveTab('missions');
                           }}
                           className="glass border border-zinc-700 hover:border-zinc-400 p-5 rounded-2xl cursor-pointer text-sm text-zinc-300 transition-all"
                         >

@@ -2,9 +2,65 @@
 
 import { Run, AgentMessage } from '@/lib/types';
 import { useTeamForgeStore } from '@/lib/store';
-import { Bot, User, Wrench, Clock, DollarSign } from 'lucide-react';
+import { Bot, Wrench, Clock, DollarSign } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { format } from 'date-fns';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
+
+const REVENUE_DATA = [
+  { month: 'Jan', revenue: 120, cost: 45 },
+  { month: 'Feb', revenue: 185, cost: 52 },
+  { month: 'Mar', revenue: 240, cost: 60 },
+  { month: 'Apr', revenue: 310, cost: 68 },
+  { month: 'May', revenue: 420, cost: 75 },
+  { month: 'Jun', revenue: 530, cost: 83 },
+  { month: 'Jul', revenue: 670, cost: 92 },
+  { month: 'Aug', revenue: 780, cost: 100 },
+  { month: 'Sep', revenue: 920, cost: 110 },
+  { month: 'Oct', revenue: 1050, cost: 120 },
+  { month: 'Nov', revenue: 1180, cost: 132 },
+  { month: 'Dec', revenue: 1340, cost: 145 },
+];
+
+function RevenueChart() {
+  return (
+    <div className="h-56 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={REVENUE_DATA} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+          <XAxis dataKey="month" tick={{ fill: '#71717a', fontSize: 10 }} />
+          <YAxis tick={{ fill: '#71717a', fontSize: 10 }} tickFormatter={(v) => `$${v}k`} />
+          <Tooltip
+            contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8, fontSize: 12 }}
+            formatter={(value: number) => [`$${value}k`, undefined]}
+          />
+          <Legend wrapperStyle={{ fontSize: 11, color: '#a1a1aa' }} />
+          <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#10b981" fill="url(#colorRevenue)" strokeWidth={2} />
+          <Area type="monotone" dataKey="cost" name="Cost" stroke="#6366f1" fill="url(#colorCost)" strokeWidth={2} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 interface RunViewerProps {
   run: Run;
@@ -151,25 +207,56 @@ export function RunViewer({ run }: RunViewerProps) {
                 </div>
                 
                 {output.type === 'image' && output.url && (
-                  <img 
-                    src={output.url} 
+                  <img
+                    src={output.url}
                     alt={output.title}
                     className="w-full rounded-xl border border-zinc-700"
                   />
                 )}
-                
-                {output.type === 'chart' && (
-                  <div className="h-64 bg-zinc-950 rounded-xl flex items-center justify-center border border-dashed border-zinc-700 text-xs text-zinc-500">
-                    Interactive Recharts Line/Bar Chart would render here<br/>with real financial projections
+
+                {output.type === 'chart' && <RevenueChart />}
+
+                {output.type === 'table' && (
+                  <div className="overflow-auto rounded-xl border border-zinc-700">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-zinc-800 text-zinc-400">
+                          <th className="text-left px-4 py-2 font-medium">Competitor</th>
+                          <th className="text-left px-4 py-2 font-medium">Market Share</th>
+                          <th className="text-left px-4 py-2 font-medium">Strengths</th>
+                          <th className="text-left px-4 py-2 font-medium">Weakness</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800">
+                        {[
+                          { name: 'Notion', share: '38%', strength: 'Templates, ecosystem', weakness: 'Complexity' },
+                          { name: 'Coda', share: '22%', strength: 'Docs + automation', weakness: 'Learning curve' },
+                          { name: 'Monday.com', share: '18%', strength: 'Project management', weakness: 'High pricing' },
+                          { name: 'Airtable', share: '14%', strength: 'Relational data', weakness: 'UI dated' },
+                        ].map((row) => (
+                          <tr key={row.name} className="text-zinc-300 hover:bg-zinc-800/50 transition-colors">
+                            <td className="px-4 py-2 font-medium">{row.name}</td>
+                            <td className="px-4 py-2 text-emerald-400">{row.share}</td>
+                            <td className="px-4 py-2">{row.strength}</td>
+                            <td className="px-4 py-2 text-zinc-500">{row.weakness}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
-                
-                {output.type === 'table' && (
-                  <div className="text-xs font-mono text-emerald-300/70 bg-black/60 p-4 rounded-xl border border-emerald-900/30">
-                    Competitor | Market Share | Strengths<br/>
-                    Notion ••••••• 38% • Strong templates<br/>
-                    Coda ••••• 22% • Docs + automation<br/>
-                    ...
+
+                {output.type === 'report' && (
+                  <div className="text-xs text-zinc-300 space-y-2 bg-zinc-950 rounded-xl p-4 border border-zinc-700">
+                    <div className="font-semibold text-white mb-3">Executive Summary</div>
+                    <p>Phase 1 (Months 1–6): Pilot launch in UK and Germany with localized onboarding, GDPR-compliant data handling, and regional pricing tiers at €49–€199/mo.</p>
+                    <p>Phase 2 (Months 7–12): Expand to France, Netherlands, and Nordics. Activate partner channel through reseller agreements with 3–5 regional SIs.</p>
+                    <p>Phase 3 (Year 2+): Full EU coverage, localized marketing automation, and dedicated EU support team. Target €6.8M ARR by end of Year 3.</p>
+                    <div className="flex gap-6 pt-2 text-[10px] text-zinc-500">
+                      <span>TAM: <span className="text-emerald-400">$2.8B</span></span>
+                      <span>SAM: <span className="text-emerald-400">$420M</span></span>
+                      <span>Target Share: <span className="text-emerald-400">1.6%</span></span>
+                    </div>
                   </div>
                 )}
               </div>
