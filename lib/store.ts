@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Run, Agent, AgentMessage } from './types';
+import { Run, Agent, AgentMessage, AgentFlow, Assistant, IntegrationConnection, IntegrationServiceId } from './types';
 import { predefinedAgents } from './agents';
 import type { ApiKeyConfig, Provider } from './llm/router';
 
@@ -9,7 +9,10 @@ interface TeamForgeState {
   currentRun: Run | null;
   isExecuting: boolean;
   apiKeys: ApiKeyConfig;
-  
+  flows: AgentFlow[];
+  assistants: Assistant[];
+  connections: Record<string, IntegrationConnection>;
+
   addRun: (goal: string) => void;
   updateRun: (runId: string, updates: Partial<Run>) => void;
   addMessageToRun: (runId: string, message: AgentMessage) => void;
@@ -23,6 +26,19 @@ interface TeamForgeState {
   deleteAgent: (agentId: string) => void;
   setApiKey: (provider: Provider, key: string) => void;
   getApiKey: (provider: Provider) => string | undefined;
+  // Flows
+  addFlow: (flow: AgentFlow) => void;
+  updateFlow: (flow: AgentFlow) => void;
+  deleteFlow: (flowId: string) => void;
+  // Assistants
+  addAssistant: (assistant: Assistant) => void;
+  updateAssistant: (assistant: Assistant) => void;
+  deleteAssistant: (assistantId: string) => void;
+  // Integrations
+  connectIntegration: (serviceId: IntegrationServiceId, accountEmail: string) => void;
+  disconnectIntegration: (serviceId: IntegrationServiceId) => void;
+  toggleIntegrationTool: (serviceId: IntegrationServiceId, toolId: string) => void;
+  getConnectedToolIds: () => string[];
 }
 
 export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
@@ -53,12 +69,24 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
     }
   }
 
+  let initialFlows: AgentFlow[] = [];
+  let initialAssistants: Assistant[] = [];
+  let initialConnections: Record<string, IntegrationConnection> = {};
+  if (typeof window !== 'undefined') {
+    try { initialFlows = JSON.parse(localStorage.getItem('teamforge_flows') || '[]'); } catch {}
+    try { initialAssistants = JSON.parse(localStorage.getItem('teamforge_assistants') || '[]'); } catch {}
+    try { initialConnections = JSON.parse(localStorage.getItem('teamforge_connections') || '{}'); } catch {}
+  }
+
   return {
     agents: initialAgents,
     runs: [],
     currentRun: null,
     isExecuting: false,
     apiKeys: initialApiKeys,
+    flows: initialFlows,
+    assistants: initialAssistants,
+    connections: initialConnections,
 
   addRun: (goal: string) => {
     const newRun: Run = {
@@ -353,17 +381,94 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
   getApiKey: (provider: Provider) => {
     const state = get();
     if (state.apiKeys[provider]) return state.apiKeys[provider];
-    
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('teamforge_api_keys');
       if (saved) {
-        try {
-          const keys = JSON.parse(saved);
-          return keys[provider];
-        } catch (e) {}
+        try { return JSON.parse(saved)[provider]; } catch {}
       }
     }
     return undefined;
+  },
+
+  // ─── Flows ─────────────────────────────────────────────────────────────────
+  addFlow: (flow) => {
+    set((state) => {
+      const flows = [...state.flows, flow];
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_flows', JSON.stringify(flows));
+      return { flows };
+    });
+  },
+  updateFlow: (flow) => {
+    set((state) => {
+      const flows = state.flows.map((f) => (f.id === flow.id ? flow : f));
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_flows', JSON.stringify(flows));
+      return { flows };
+    });
+  },
+  deleteFlow: (flowId) => {
+    set((state) => {
+      const flows = state.flows.filter((f) => f.id !== flowId);
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_flows', JSON.stringify(flows));
+      return { flows };
+    });
+  },
+
+  // ─── Assistants ────────────────────────────────────────────────────────────
+  addAssistant: (assistant) => {
+    set((state) => {
+      const assistants = [...state.assistants, assistant];
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_assistants', JSON.stringify(assistants));
+      return { assistants };
+    });
+  },
+  updateAssistant: (assistant) => {
+    set((state) => {
+      const assistants = state.assistants.map((a) => (a.id === assistant.id ? assistant : a));
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_assistants', JSON.stringify(assistants));
+      return { assistants };
+    });
+  },
+  deleteAssistant: (assistantId) => {
+    set((state) => {
+      const assistants = state.assistants.filter((a) => a.id !== assistantId);
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_assistants', JSON.stringify(assistants));
+      return { assistants };
+    });
+  },
+
+  // ─── Integrations ──────────────────────────────────────────────────────────
+  connectIntegration: (serviceId, accountEmail) => {
+    set((state) => {
+      const connections = {
+        ...state.connections,
+        [serviceId]: { serviceId, connected: true, connectedAt: new Date().toISOString(), accountEmail, enabledToolIds: [] },
+      };
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_connections', JSON.stringify(connections));
+      return { connections };
+    });
+  },
+  disconnectIntegration: (serviceId) => {
+    set((state) => {
+      const connections = { ...state.connections };
+      delete connections[serviceId];
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_connections', JSON.stringify(connections));
+      return { connections };
+    });
+  },
+  toggleIntegrationTool: (serviceId, toolId) => {
+    set((state) => {
+      const conn = state.connections[serviceId];
+      if (!conn) return state;
+      const enabled = conn.enabledToolIds.includes(toolId)
+        ? conn.enabledToolIds.filter((id) => id !== toolId)
+        : [...conn.enabledToolIds, toolId];
+      const connections = { ...state.connections, [serviceId]: { ...conn, enabledToolIds: enabled } };
+      if (typeof window !== 'undefined') localStorage.setItem('teamforge_connections', JSON.stringify(connections));
+      return { connections };
+    });
+  },
+  getConnectedToolIds: () => {
+    return Object.values(get().connections).flatMap((c) => (c.connected ? c.enabledToolIds : []));
   },
   };
 });

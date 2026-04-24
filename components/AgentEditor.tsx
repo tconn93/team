@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { Agent } from '@/lib/types';
 import { useTeamForgeStore } from '@/lib/store';
 import { listModels } from '@/lib/llm/router';
-import { X, Save, Plus, Loader2 } from 'lucide-react';
+import { GOOGLE_SERVICES, MICROSOFT_SERVICES } from '@/lib/integrations';
+import { X, Save, Loader2 } from 'lucide-react';
 import type { Provider } from '@/lib/llm/router';
 
 interface AgentEditorProps {
@@ -12,10 +13,6 @@ interface AgentEditorProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const availableTools = [
-  'web_search', 'code_execution', 'generate_image', 'analyze_data'
-];
 
 const defaultColors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#ef4444'];
 
@@ -60,7 +57,25 @@ const modelOptions: Record<Provider, string[]> = {
 };
 
 export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
-  const { addAgent, updateAgent, getApiKey } = useTeamForgeStore();
+  const { addAgent, updateAgent, getApiKey, connections } = useTeamForgeStore();
+
+  // Base tools + any enabled integration tools from connected services
+  const integrationToolIds = [...GOOGLE_SERVICES, ...MICROSOFT_SERVICES].flatMap((s) => {
+    const conn = connections[s.id];
+    if (!conn?.connected) return [];
+    return (conn.enabledToolIds ?? []).map((tid) => {
+      const tool = s.tools.find((t) => t.id === tid);
+      return tool ? { id: tid, label: `${s.icon} ${tool.name}` } : null;
+    }).filter(Boolean) as { id: string; label: string }[];
+  });
+
+  const availableTools = [
+    { id: 'web_search', label: '🔍 web_search' },
+    { id: 'code_execution', label: '💻 code_execution' },
+    { id: 'generate_image', label: '🖼️ generate_image' },
+    { id: 'analyze_data', label: '📊 analyze_data' },
+    ...integrationToolIds,
+  ];
   
   const [formData, setFormData] = useState<Partial<Agent>>(() => getDefaultFormData());
 
@@ -266,25 +281,25 @@ export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
 
               <div>
                 <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-3">AVAILABLE TOOLS</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
                   {availableTools.map(tool => (
                     <button
-                      key={tool}
+                      key={tool.id}
                       type="button"
                       onClick={() => {
                         const current = formData.tools || [];
-                        const newTools = current.includes(tool) 
-                          ? current.filter(t => t !== tool)
-                          : [...current, tool];
+                        const newTools = current.includes(tool.id)
+                          ? current.filter(t => t !== tool.id)
+                          : [...current, tool.id];
                         setFormData({ ...formData, tools: newTools });
                       }}
                       className={`px-4 py-2 text-sm rounded-2xl border transition-all ${
-                        (formData.tools || []).includes(tool) 
-                          ? 'bg-blue-500 border-blue-500 text-white' 
+                        (formData.tools || []).includes(tool.id)
+                          ? 'bg-blue-500 border-blue-500 text-white'
                           : 'border-zinc-700 hover:border-zinc-500'
                       }`}
                     >
-                      {tool}
+                      {tool.label}
                     </button>
                   ))}
                 </div>
