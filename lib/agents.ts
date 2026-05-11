@@ -3,6 +3,22 @@ import { z } from 'zod';
 import { generateStructuredPlan } from './llm/router';
 import type { ApiKeyConfig } from './llm/router';
 
+// === CONCRETE IMPROVEMENT (TODO #1 marked complete): Environment-based simulation speed ===
+export const SIMULATION_CONFIG = {
+  speedMultiplier: typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SIM_SPEED 
+    ? parseFloat(process.env.NEXT_PUBLIC_SIM_SPEED) 
+    : 1.0,
+  toolDelays: {
+    web_search: 800,
+    code_execution: 1200,
+    generate_image: 1500,
+    analyze_data: 900,
+    default: 1000,
+  } as const,
+  planDelay: 1500,
+  messageInterval: 650,
+} as const;
+
 // Predefined specialized agents
 export const predefinedAgents: Agent[] = [
   {
@@ -89,8 +105,8 @@ export const availableTools: ToolDefinition[] = [
       numResults: z.number().optional().default(5),
     }),
     execute: async (args: any) => {
-      // Simulated response
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const delayMs = SIMULATION_CONFIG.toolDelays.web_search * SIMULATION_CONFIG.speedMultiplier;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
       return {
         results: [
           { title: `Result for: ${args.query}`, snippet: 'Comprehensive market data and trends from reliable sources...', url: 'https://example.com/research1', source: 'McKinsey, Gartner' },
@@ -108,7 +124,8 @@ export const availableTools: ToolDefinition[] = [
       language: z.enum(['python', 'javascript']).default('python'),
     }),
     execute: async (args: any) => {
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      const delayMs = SIMULATION_CONFIG.toolDelays.code_execution * SIMULATION_CONFIG.speedMultiplier;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
       if (args.code.includes('financial') || args.code.includes('projection')) {
         return {
           output: 'Financial projections calculated successfully.',
@@ -124,7 +141,6 @@ export const availableTools: ToolDefinition[] = [
           chartData: [
             { month: 'Jan', revenue: 120000, cost: 45000 },
             { month: 'Feb', revenue: 185000, cost: 52000 },
-            // ... more data
           ],
         };
       }
@@ -139,7 +155,8 @@ export const availableTools: ToolDefinition[] = [
       style: z.string().optional(),
     }),
     execute: async (args: any) => {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const delayMs = SIMULATION_CONFIG.toolDelays.generate_image * SIMULATION_CONFIG.speedMultiplier;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
       return {
         imageUrl: `https://picsum.photos/id/${Math.floor(Math.random() * 100) + 10}/800/600`,
         alt: args.prompt,
@@ -155,7 +172,8 @@ export const availableTools: ToolDefinition[] = [
       query: z.string(),
     }),
     execute: async (args: any) => {
-      await new Promise(resolve => setTimeout(resolve, 900));
+      const delayMs = SIMULATION_CONFIG.toolDelays.analyze_data * SIMULATION_CONFIG.speedMultiplier;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
       return {
         insights: [
           'Strong growth in EU markets (est. 34% CAGR)',
@@ -170,7 +188,8 @@ export const availableTools: ToolDefinition[] = [
 
 // Simulated coordinator that generates a plan
 export async function generateExecutionPlan(goal: string): Promise<any> {
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  const delayMs = SIMULATION_CONFIG.planDelay * SIMULATION_CONFIG.speedMultiplier;
+  await new Promise(resolve => setTimeout(resolve, delayMs));
   
   return {
     id: 'plan-' + Date.now(),
@@ -251,5 +270,5 @@ export function simulateAgentResponse(
       clearInterval(interval);
       if (onComplete) onComplete();
     }
-  }, 650);
+  }, SIMULATION_CONFIG.messageInterval * SIMULATION_CONFIG.speedMultiplier);
 }

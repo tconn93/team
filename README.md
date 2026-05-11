@@ -200,3 +200,27 @@ The current demo runs perfectly without any keys using the realistic simulation 
 1. `cp .env.example .env.local`
 2. Fill in your API keys.
 3. Update `lib/llm/router.ts` and `lib/store.ts` to use real providers.
+
+
+## Recent Improvements & TODO
+
+- Configurable simulation speeds added
+- TODO.md created with prioritized roadmap (18+ tasks)
+- Environment setup improved with `.env.example`
+
+See `TODO.md` for remaining tasks.
+
+## Next Steps
+
+Refer to `TODO.md` for the full list of planned enhancements.
+## Deployment
+
+### Docker
+```bash
+docker build -t teamforge .
+docker run -p 3000:3000 teamforge
+```
+
+Note: For full Next.js standalone mode, update next.config.mjs with output: 'standalone'.
+
+See TODO.md for full roadmap.

@@ -5,6 +5,9 @@ const nextConfig = {
   // Server-only packages (Prisma, Mastra, etc.) - moved from experimental in Next.js 15.2+
   serverExternalPackages: ['mastra', '@mastra/core', '@prisma/client', 'prisma'],
 
+  // Fix for Turbopack + webpack config warning (Next.js 15+)
+  turbopack: {},
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Prevent ALL Node.js core modules used by Prisma/Mastra from client bundle
