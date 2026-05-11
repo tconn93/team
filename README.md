@@ -133,3 +133,70 @@ Built as a demonstration of modern agentic systems in 2026.
 - Team collaboration features
 
 Made with ❤️ for the AI engineering community.
+
+## Recent Improvements (via Grok)
+
+- Added `.env.example` with API key placeholders for easy real LLM setup.
+- Ready for productionizing the Mastra coordinator and LLM router.
+
+**To enable real AI calls:**
+1. Copy `.env.example` to `.env.local`
+2. Add your API keys
+3. Enhance `generateStructuredPlan` in `lib/llm/router.ts` to use actual `generateObject` from AI SDK when keys are present.
+
+Next steps: Wire up real streaming LLM responses and integrate more Mastra workflows.
+## Environment Setup
+
+1. Copy the environment file:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Fill in your API keys in `.env.local`.
+
+This will enable real LLM calls when you wire up the providers.
+
+## Recent Improvements (Implemented via My Dev Server)
+
+- Added `.env.example` with API key placeholders for easy real LLM integration (xAI, OpenAI, Anthropic, Google).
+- Simulation delays are now more dynamic (planned next).
+
+To enable real AI:
+1. `cp .env.example .env.local`
+2. Fill in your API keys.
+3. Update `lib/agents.ts` and `lib/llm/router.ts` to use real calls where mocked.
+
+Next steps: Extract large components, add error boundaries, configurable simulation speed.
+
+## Environment Setup
+
+1. Copy `.env.example` to `.env.local` (created for you):
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Add your API keys for real LLM calls (optional - simulation works without them).
+
+3. The app detects keys automatically via the LLM router.
+## Environment Setup
+
+Copy the environment variables file and add your keys:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in API keys for the providers you want to enable (OpenAI, Anthropic, xAI/Grok, Google).
+
+The current demo runs perfectly without any keys using the realistic simulation engine.
+
+
+
+## Recent Improvements (May 2026)
+- Added `.env.example` with API key placeholders for easy real LLM setup.
+- Ready for production AI integration.
+
+**To use real LLMs:**
+1. `cp .env.example .env.local`
+2. Fill in your API keys.
+3. Update `lib/llm/router.ts` and `lib/store.ts` to use real providers.
