@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { Run, Agent, AgentMessage, StreamEvent } from './types';
+import { Run, Agent, AgentMessage, StreamEvent, AppSettings } from './types';
 import { predefinedAgents } from './agents';
 import type { ApiKeyConfig, Provider } from './llm/router';
+import { DEFAULT_SETTINGS } from './settings';
 
 interface TeamForgeState {
   agents: Agent[];
@@ -9,6 +10,7 @@ interface TeamForgeState {
   currentRun: Run | null;
   isExecuting: boolean;
   apiKeys: ApiKeyConfig;
+  settings: AppSettings;
 
   addRun: (goal: string) => void;
   updateRun: (runId: string, updates: Partial<Run>) => void;
@@ -22,6 +24,8 @@ interface TeamForgeState {
   deleteAgent: (agentId: string) => void;
   setApiKey: (provider: Provider, key: string) => void;
   getApiKey: (provider: Provider) => string | undefined;
+  updateSettings: (settings: Partial<AppSettings>) => void;
+  resolveApproval: (approvalId: string, approved: boolean, modifiedInput?: Record<string, unknown>) => void;
 }
 
 export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
@@ -63,12 +67,26 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
     }
   }
 
+  // Load settings from localStorage (synced with DB on the server side)
+  let initialSettings: AppSettings = { ...DEFAULT_SETTINGS };
+  if (typeof window !== 'undefined') {
+    const savedSettings = localStorage.getItem('teamforge_settings');
+    if (savedSettings) {
+      try {
+        initialSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) };
+      } catch {
+        // Use defaults
+      }
+    }
+  }
+
   return {
     agents: initialAgents,
     runs: [],
     currentRun: null,
     isExecuting: false,
     apiKeys: initialApiKeys,
+    settings: initialSettings,
 
     addRun: (goal: string) => {
       const newRun: Run = {
@@ -252,6 +270,38 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
               updateRun(runId, {
                 plan: event.plan as any,
                 status: 'executing' as const,
+              });
+            }
+            break;
+          }
+
+          case 'tool_approval_request': {
+            if (event.approval) {
+              addMessageToRun(runId, {
+                id: `msg-approval-${Date.now()}`,
+                agentId: event.agentId,
+                role: 'system',
+                content: `⚠️ Approval required for ${event.approval.tool}: ${JSON.stringify(event.approval.input).substring(0, 200)}`,
+                timestamp: new Date(),
+              });
+            }
+            break;
+          }
+
+          case 'checkpoint_saved': {
+            // Silent — no UI message needed for checkpoints
+            break;
+          }
+
+          case 'guardrail_flagged': {
+            if (event.guardrail) {
+              const severityIcon = event.guardrail.severity === 'high' ? '🔴' : event.guardrail.severity === 'medium' ? '🟡' : '🟢';
+              addMessageToRun(runId, {
+                id: `msg-guardrail-${Date.now()}`,
+                agentId: event.agentId,
+                role: 'system',
+                content: `${severityIcon} Guardrail: ${event.guardrail.message}`,
+                timestamp: new Date(),
               });
             }
             break;
@@ -461,6 +511,14 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
         }
         return { apiKeys: newKeys };
       });
+      // Persist to encrypted backend storage
+      fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, key }),
+      }).catch(() => {
+        // Backend storage failed — key is still in localStorage
+      });
     },
 
     getApiKey: (provider: Provider) => {
@@ -479,6 +537,34 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
         }
       }
       return undefined;
+    },
+
+    updateSettings: (updates: Partial<AppSettings>) => {
+      set((state) => {
+        const newSettings = { ...state.settings, ...updates };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('teamforge_settings', JSON.stringify(newSettings));
+        }
+        // Persist to backend
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSettings),
+        }).catch(() => {
+          // Backend persistence failed — settings still in local state
+        });
+        return { settings: newSettings };
+      });
+    },
+
+    resolveApproval: (approvalId: string, approved: boolean, modifiedInput?: Record<string, unknown>) => {
+      fetch('/api/run/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: approvalId, approved, modifiedInput }),
+      }).catch(() => {
+        // Approval resolution failed
+      });
     },
   };
 });

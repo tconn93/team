@@ -2,6 +2,25 @@ import Anthropic from '@anthropic-ai/sdk';
 import { predefinedAgents } from '../agents';
 import * as memawi from '../memawi';
 
+/**
+ * Sandbox all file operations to the project workspace directory.
+ * Prevents directory traversal attacks by ensuring resolved paths
+ * stay within the allowed root.
+ */
+const WORKSPACE_ROOT = process.cwd();
+
+function sandboxPath(relativePath: string): { fullPath: string; safe: string } | { error: string } {
+  const pathModule = require('path');
+  const resolved = pathModule.resolve(WORKSPACE_ROOT, relativePath);
+  const normalizedRoot = pathModule.resolve(WORKSPACE_ROOT);
+
+  if (!resolved.startsWith(normalizedRoot + pathModule.sep) && resolved !== normalizedRoot) {
+    return { error: `Access denied: path escapes workspace. Requested: ${relativePath}` };
+  }
+
+  return { fullPath: resolved, safe: pathModule.relative(normalizedRoot, resolved) };
+}
+
 // Tool definitions in Anthropic's format
 export const toolDefinitions: Anthropic.Tool[] = [
   {
@@ -267,13 +286,13 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
   ['file_read', async (input) => {
     const filePath = input.path as string;
     console.log(`[Tool:file_read] Reading: ${filePath}`);
+    const sandboxed = sandboxPath(filePath);
+    if ('error' in sandboxed) return { error: sandboxed.error };
     const fs = await import('fs');
-    const path = await import('path');
-    const fullPath = path.join(process.cwd(), filePath);
     try {
-      const content = fs.readFileSync(fullPath, 'utf-8');
+      const content = fs.readFileSync(sandboxed.fullPath, 'utf-8');
       const lines = content.split('\n').length;
-      return { path: filePath, content, lines, size: content.length };
+      return { path: sandboxed.safe, content, lines, size: content.length };
     } catch (error) {
       return { error: `Could not read file: ${error instanceof Error ? error.message : 'Unknown error'}`, path: filePath };
     }
@@ -284,6 +303,9 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
     let content = input.content as string;
     const createDirs = (input.create_dirs as boolean) ?? true;
     console.log(`[Tool:file_write] Writing: ${filePath} (${content.length} chars)`);
+
+    const sandboxed = sandboxPath(filePath);
+    if ('error' in sandboxed) return { error: sandboxed.error };
 
     // Decode HTML entities if content appears encoded
     if (content.includes('&amp;') || content.includes('&lt;') || content.includes('&gt;') || content.includes('&quot;')) {
@@ -297,15 +319,14 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
 
     const fs = await import('fs');
     const pathModule = await import('path');
-    const fullPath = pathModule.join(process.cwd(), filePath);
 
     try {
       if (createDirs) {
-        const dir = pathModule.dirname(fullPath);
+        const dir = pathModule.dirname(sandboxed.fullPath);
         fs.mkdirSync(dir, { recursive: true });
       }
-      fs.writeFileSync(fullPath, content, 'utf-8');
-      return { success: true, path: filePath, size: content.length };
+      fs.writeFileSync(sandboxed.fullPath, content, 'utf-8');
+      return { success: true, path: sandboxed.safe, size: content.length };
     } catch (error) {
       return { error: `Could not write file: ${error instanceof Error ? error.message : 'Unknown error'}`, path: filePath };
     }
@@ -316,6 +337,9 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
     let oldString = input.old_string as string;
     let newString = input.new_string as string;
     console.log(`[Tool:file_edit] Editing: ${filePath}`);
+
+    const sandboxed = sandboxPath(filePath);
+    if ('error' in sandboxed) return { error: sandboxed.error };
 
     // Decode HTML entities in both old and new strings if they appear encoded
     const decode = (s: string) => {
@@ -333,21 +357,19 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
     newString = decode(newString);
 
     const fs = await import('fs');
-    const pathModule = await import('path');
-    const fullPath = pathModule.join(process.cwd(), filePath);
 
     try {
-      const content = fs.readFileSync(fullPath, 'utf-8');
+      const content = fs.readFileSync(sandboxed.fullPath, 'utf-8');
       if (!content.includes(oldString)) {
-        return { error: `old_string not found in ${filePath}. Make sure the string matches exactly.`, path: filePath };
+        return { error: `old_string not found in ${sandboxed.safe}. Make sure the string matches exactly.`, path: sandboxed.safe };
       }
       const occurrences = content.split(oldString).length - 1;
       if (occurrences > 1) {
-        return { error: `old_string appears ${occurrences} times in ${filePath}. Provide more context to make it unique.`, path: filePath };
+        return { error: `old_string appears ${occurrences} times in ${sandboxed.safe}. Provide more context to make it unique.`, path: sandboxed.safe };
       }
       const newContent = content.replace(oldString, newString);
-      fs.writeFileSync(fullPath, newContent, 'utf-8');
-      return { success: true, path: filePath, replaced: 1 };
+      fs.writeFileSync(sandboxed.fullPath, newContent, 'utf-8');
+      return { success: true, path: sandboxed.safe, replaced: 1 };
     } catch (error) {
       return { error: `Could not edit file: ${error instanceof Error ? error.message : 'Unknown error'}`, path: filePath };
     }

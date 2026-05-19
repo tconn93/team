@@ -5,7 +5,8 @@ export { Anthropic, DEFAULT_MODEL };
 
 export function createAnthropicClient(apiKey?: string): Anthropic {
   return new Anthropic({
-    apiKey: apiKey || process.env.ANTHROPIC_API_KEY || '',
+    apiKey: apiKey || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY || '',
+    baseURL: process.env.ANTHROPIC_BASE_URL || undefined,
     dangerouslyAllowBrowser: false,
   });
 }

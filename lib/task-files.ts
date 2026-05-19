@@ -106,7 +106,7 @@ Format:
   });
 
   const textBlocks = response.content.filter(
-    (block): block is { type: 'text'; text: string } => block.type === 'text'
+    (block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text'
   );
   return textBlocks.map(b => b.text).join('\n').trim();
 }

@@ -1,226 +1,180 @@
-# TeamForge
+# TeamForge — Hyperagent OS
 
-A production-grade demonstration of a **Hyperagent / Multi-Agent Orchestration Platform** inspired by Airtable's vision for AI agents that can tackle complex, multi-step goals.
+A multi-agent orchestration platform where specialized AI agents collaborate on complex goals. Each agent runs in Claude Code-style "goal mode" — receiving a task, calling the Anthropic Messages API with tools, executing results, and iterating until done.
 
-Built with Next.js 15, TypeScript, Tailwind, Zustand, and simulated Mastra-like agent primitives.
+Built with Next.js 15, TypeScript, Tailwind CSS, Zustand, and the Anthropic Messages API.
 
-## Core Capabilities Demonstrated
+## Architecture
 
-- **Coordinator Agent**: Dynamically generates structured execution plans using JSON schemas
-- **Specialized Agent Fleet**: Researcher, Financial Analyst, Strategist, Visualizer with persistent configs
-- **Parallel Execution**: Agents run concurrently with dependency graphs
-- **Tool Integration**: Web search, code execution sandbox simulation, image generation, data analysis
-- **Streaming UX**: Real-time thoughts, tool calls, and progress updates
-- **Rich Deliverables**: Embedded charts (Recharts ready), generated images, tables, structured reports
-- **Observability**: Complete trace of every agent action with timestamps and costs
-- **Memory & State**: Persistent runs, agent memory simulation
+```
+User Goal
+    │
+    ▼
+Coordinator Agent (plans & delegates)
+    │
+    ├─► Researcher (Alex Rivera)      — web search, competitive analysis
+    ├─► Analyst (Dr. Lena Chen)       — financial modeling, data analysis
+    ├─► Writer (Marcus Hale)          — content creation, strategy docs
+    ├─► Visualizer (Sofia Patel)      — charts, diagrams, image generation
+    └─► Brainstormer (Nova Kim)      — feature analysis, ideation
 
-## Tech Stack
+Each agent:
+  1. Receives a goal
+  2. Calls Anthropic Messages API with tool definitions
+  3. Executes tool calls in parallel (Promise.all)
+  4. Feeds results back and loops until stop_reason: end_turn
+  5. Returns final output
+```
 
-- **Framework**: Next.js 15 (App Router) + React 19
-- **Styling**: Tailwind CSS + shadcn/ui inspired design system
-- **State**: Zustand for global agent & run management
-- **Schemas**: Zod for all tool definitions and structured outputs
-- **Visualization**: Recharts (ready for integration), Lucide icons
-- **AI Simulation**: Mock streaming with realistic timing and tool calls (ready for Vercel AI SDK + Mastra or LangGraph.js)
+**Orchestrator Loop** — always-on engine that picks tasks from a persistent board, dispatches agents, and triggers reviews. The **Feature Scout** identifies improvement opportunities and seeds the board autonomously.
+
+## Key Features
+
+- **Real Agent Execution** — Anthropic Messages API with tool_use/tool_result flow, not simulation
+- **Parallel Tool Execution** — multiple tool_use blocks in a single response executed via Promise.all
+- **SSE Streaming** — real-time events from server to client during mission execution
+- **Task Board** — persistent JSON/Postgres-backed task management with priorities and dependencies
+- **Feature Scout** — identifies codebase improvements and seeds the task board
+- **Review Agent** — validates completed work and creates follow-up tasks
+- **Orchestrator Loop** — autonomous cycle that processes tasks continuously
+- **Memawi Integration** — persistent agent memory with MEMORY.md, CONTEXT.md, TODO.md, TaskList.md
+- **Context Optimization** — auto-compresses CONTEXT.md when it exceeds 300K tokens (via Memawi or local LLM)
+- **Encrypted API Key Storage** — AES-256-CBC encrypted in Postgres, never stored in plaintext
+- **File I/O Sandbox** — all file tools restricted to workspace directory, preventing traversal attacks
+- **Configurable Models** — DEFAULT_MODEL, FAST_MODEL, EXPERT_MODEL via environment variables
+
+## Environment Variables
+
+```bash
+# === Required ===
+ANTHROPIC_API_KEY=sk-ant-...          # Required for all agent execution
+
+# === Model Configuration (optional — defaults shown) ===
+DEFAULT_MODEL=claude-sonnet-4-20250514  # Standard agent execution
+FAST_MODEL=claude-3-5-haiku-20241022    # Reviews, scouts, context optimization
+EXPERT_MODEL=claude-opus-4-20250514     # Complex planning and coordination
+
+# === Memory (required for agent memory) ===
+MEMAWI_URL=http://localhost:8765
+MEMAWI_EXTRACT_CONSOLID=false           # true = use Memawi API for context consolidation
+                                        # false = use local FAST_MODEL
+
+# === Database (required for persistent storage) ===
+# Supports JDBC: jdbc:postgresql://user:password@host:port/database
+# Or standard:  postgresql://user:password@host:port/database
+POSTGRES_DB_URL=jdbc:postgresql://user:password@localhost:5432/team_ai
+
+# === Security ===
+ENCRYPTION_KEY=change-this-in-production  # For encrypting API keys in DB
+
+# === Optional Provider Keys ===
+OPENAI_API_KEY=sk-...
+XAI_API_KEY=xai-...
+GOOGLE_API_KEY=...
+```
 
 ## Getting Started
 
-1. Install dependencies:
 ```bash
-npm install
-# If you see peer dependency warnings, use:
-# npm install --legacy-peer-deps
-```
-
-2. Run the development server:
-```bash
+npm install --legacy-peer-deps
+cp .env.example .env.local
+# Edit .env.local with your Anthropic API key and Postgres URL
 npm run dev
 ```
 
-3. Open [http://localhost:3000](http://localhost:3000)
+Open http://localhost:3000. Enter a goal, watch the coordinator plan and dispatch agents in real time.
 
 ## Project Structure
 
 ```
-/app
-  layout.tsx          # Root layout with dark theme
+app/
+  api/
+    config/          # Model config endpoint (DEFAULT/FAST/EXPERT)
+    db-init/          # Initialize Postgres schema
+    health/           # Health check + DB status
+    keys/             # Encrypted API key CRUD
+    memory/           # Memawi proxy (remember, recall, context, agent metadata)
+    orchestrator/     # Task board operations (cycle, scout, status)
+    run/              # SSE streaming endpoint for mission execution
+    runs/             # Persist completed runs to DB
+    tasks/            # CRUD for persistent task board
+    test-connection/  # Validate API keys
   page.tsx            # Main command center UI
-/lib
+
+lib/
+  agents.ts           # 6 predefined agents + tool definitions
+  api-keys.ts         # AES-256-CBC encrypted key storage in Postgres
+  context-optimizer.ts # Context compression (Memawi or local LLM)
+  db.ts               # Postgres connection pool + schema init
+  db-runs.ts          # Run persistence to Postgres
+  memawi.ts           # HTTP client for Memawi memory server
+  models.ts           # DEFAULT_MODEL, FAST_MODEL, EXPERT_MODEL from env
+  store.ts            # Zustand state (agents, runs, SSE processing)
+  task-files.ts       # TaskList.md + TODO.md generation for agents
+  tasks.ts            # Persistent task board (Postgres with JSON fallback)
   types.ts            # Core TypeScript interfaces
-  agents.ts           # Agent definitions, mock tools, plan generator
-  store.ts            # Zustand global state + simulation engine
-/components
-  AgentCard.tsx       # Fleet cards
-  RunViewer.tsx       # Live execution trace and rich output renderer
+
+  anthropic/
+    agent-runner.ts   # Goal-mode agentic loop (core execution engine)
+    client.ts         # Anthropic SDK client initialization
+    coordinator.ts    # Plan creation + subtask delegation
+    loop.ts           # OrchestratorLoop — always-on task processor
+    reviewer.ts       # Quality review agent
+    scout.ts          # Feature scout agent
+    tools.ts          # 9 tool definitions + executors (sandboxed file I/O)
+
+components/
+  AgentCard.tsx       # Fleet card with status indicator
+  AgentEditor.tsx     # Create/edit agents with live model list
+  RunViewer.tsx        # Real-time execution trace + rich output renderer
+  SettingsModal.tsx   # API key configuration + connection testing
 ```
 
-## Extending This Demo
+## Agent Memory (Memawi)
 
-### Adding Real AI
+Each agent maintains four metadata files via the Memawi server:
 
-Replace the simulation functions in `lib/agents.ts` and `lib/store.ts` with:
+| File | Purpose | Scope |
+|------|---------|-------|
+| `MEMORY.md` | Global long-term memory | Persists across sessions |
+| `CONTEXT.md` | Current session context | Short-term, auto-compressed when >300K tokens |
+| `TODO.md` | Current task breakdown | Wiped and regenerated when task changes |
+| `TaskList.md` | Current + queued tasks | Updated every cycle |
 
-```ts
-import { generateText, streamText } from 'ai';
-import { openai } from '@ai-sdk/openai';
-// or mastra, langgraph, etc.
-```
+When `CONTEXT.md` exceeds 300K tokens:
+- `MEMAWI_EXTRACT_CONSOLID=true` → Memawi's LLM-powered consolidation endpoint handles it
+- `MEMAWI_EXTRACT_CONSOLID=false` → Local `FAST_MODEL` compresses it via Anthropic API
 
-### Adding Mastra
+## Security
 
-1. Install `mastra` and `@mastra/core`
-2. Create workflows with `createWorkflow()`
-3. Define tools with Zod schemas
-4. Add memory stores (Upstash Vector, Pinecone)
-5. Integrate the Coordinator as the entrypoint workflow
+- **File I/O sandbox** — All file tools validate paths stay within `process.cwd()`. Paths like `../../../etc/passwd` are rejected.
+- **Encrypted API keys** — Stored in Postgres using AES-256-CBC with scrypt-derived keys. Never plaintext.
+- **Server-side key management** — `POST /api/keys` encrypts and stores; `GET /api/keys` returns only which providers are configured (never key values).
 
-### Real Tools
+## Database
 
-- **E2B** or **Fireworks** for sandboxed code execution
-- **Tavily** or **Serper** for web search
-- **Replicate** / **Fal.ai** for Flux image generation
-- **LangSmith** / **Helicone** for observability
+Postgres is used for persistent storage with automatic JSON file fallback:
 
-### Production Features to Add Next
+| Table | Purpose |
+|-------|---------|
+| `tasks` | Persistent task board |
+| `runs` | Completed mission history |
+| `agent_edits` | Predefined agent configuration overrides |
+| `custom_agents` | User-created agents |
+| `api_keys` | Encrypted provider API keys |
+| `agent_memory` | Task result history |
 
-- Authentication & multi-tenancy
-- Real vector memory (RAG over past runs)
-- Human-in-the-loop approval gates
-- Cost tracking & budget guardrails
-- Evaluation framework (LLM-as-judge)
-- Export to PDF/Notion/Slack
-- Agent definition UI with Monaco editor for prompts
-- Live trace visualization (like LangSmith)
+Initialize the schema: `POST /api/db-init`
 
-## Architecture Diagram
-
-```mermaid
-graph TD
-    User[User Input] --> Coordinator[Coordinator Agent]
-    Coordinator --> PlanGen[Structured Plan Generation]
-    PlanGen --> Parallel[Parallel Agent Execution]
-    
-    Parallel --> Researcher[Researcher Agent]
-    Parallel --> Analyst[Financial Analyst]
-    Parallel --> Writer[Strategy Writer]
-    Parallel --> Visualizer[Data Visualizer]
-    
-    Researcher & Analyst & Writer --> Synthesis[Synthesis & Quality Gate]
-    Synthesis --> Deliverables[Rich Outputs<br/>• Charts<br/>• Reports<br/>• Images<br/>• Dashboards]
-    
-    subgraph Observability
-        Tracing[LangSmith-style Traces]
-        Memory[Vector Memory]
-        Guardrails[Budget + Safety]
-    end
-    
-    Coordinator -.-> Observability
-```
-
-**This is fully interactive.** Try launching missions with the example prompts. Watch the Coordinator break down the goal, deploy agents in parallel, simulate tool calls, and synthesize beautiful final deliverables.
-
-Built as a demonstration of modern agentic systems in 2026.
-```
-
-## Future Roadmap
-
-- Full Mastra integration with real LLM calls
-- Persistent database (Supabase/Postgres + vector search)
-- Agent configuration UI with live prompt testing
-- Advanced visualization components
-- Multi-modal output support
-- Team collaboration features
-
-Made with ❤️ for the AI engineering community.
-
-## Recent Improvements (via Grok)
-
-- Added `.env.example` with API key placeholders for easy real LLM setup.
-- Ready for productionizing the Mastra coordinator and LLM router.
-
-**To enable real AI calls:**
-1. Copy `.env.example` to `.env.local`
-2. Add your API keys
-3. Enhance `generateStructuredPlan` in `lib/llm/router.ts` to use actual `generateObject` from AI SDK when keys are present.
-
-Next steps: Wire up real streaming LLM responses and integrate more Mastra workflows.
-## Environment Setup
-
-1. Copy the environment file:
-   ```bash
-   cp .env.example .env.local
-   ```
-
-2. Fill in your API keys in `.env.local`.
-
-This will enable real LLM calls when you wire up the providers.
-
-## Recent Improvements (Implemented via My Dev Server)
-
-- Added `.env.example` with API key placeholders for easy real LLM integration (xAI, OpenAI, Anthropic, Google).
-- Simulation delays are now more dynamic (planned next).
-
-To enable real AI:
-1. `cp .env.example .env.local`
-2. Fill in your API keys.
-3. Update `lib/agents.ts` and `lib/llm/router.ts` to use real calls where mocked.
-
-Next steps: Extract large components, add error boundaries, configurable simulation speed.
-
-## Environment Setup
-
-1. Copy `.env.example` to `.env.local` (created for you):
-   ```bash
-   cp .env.example .env.local
-   ```
-
-2. Add your API keys for real LLM calls (optional - simulation works without them).
-
-3. The app detects keys automatically via the LLM router.
-## Environment Setup
-
-Copy the environment variables file and add your keys:
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in API keys for the providers you want to enable (OpenAI, Anthropic, xAI/Grok, Google).
-
-The current demo runs perfectly without any keys using the realistic simulation engine.
-
-
-
-## Recent Improvements (May 2026)
-- Added `.env.example` with API key placeholders for easy real LLM setup.
-- Ready for production AI integration.
-
-**To use real LLMs:**
-1. `cp .env.example .env.local`
-2. Fill in your API keys.
-3. Update `lib/llm/router.ts` and `lib/store.ts` to use real providers.
-
-
-## Recent Improvements & TODO
-
-- Configurable simulation speeds added
-- TODO.md created with prioritized roadmap (18+ tasks)
-- Environment setup improved with `.env.example`
-
-See `TODO.md` for remaining tasks.
-
-## Next Steps
-
-Refer to `TODO.md` for the full list of planned enhancements.
 ## Deployment
 
-### Docker
 ```bash
 docker build -t teamforge .
 docker run -p 3000:3000 teamforge
 ```
 
-Note: For full Next.js standalone mode, update next.config.mjs with output: 'standalone'.
+For standalone mode, add `output: 'standalone'` to `next.config.mjs`.
 
-See TODO.md for full roadmap.
+## License
+
+MIT

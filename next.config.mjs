@@ -1,13 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
-  // Server-only packages (Prisma, Mastra, etc.) - moved from experimental in Next.js 15.2+
-  serverExternalPackages: ['mastra', '@mastra/core', '@prisma/client', 'prisma', 'pg'],
+
+  // Server-only packages - pg uses native bindings
+  serverExternalPackages: ['pg'],
 
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Prevent ALL Node.js core modules used by Prisma/Mastra from client bundle
+      // Prevent Node.js core modules from leaking into the client bundle
       config.resolve.fallback = {
         ...config.resolve.fallback,
         async_hooks: false,
@@ -28,10 +28,7 @@ const nextConfig = {
       // Force externalization of server-only packages
       config.externals = [
         ...(Array.isArray(config.externals) ? config.externals : []),
-        'mastra',
-        '@mastra/core',
-        '@prisma/client',
-        'prisma',
+        'pg',
       ];
     }
     return config;

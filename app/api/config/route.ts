@@ -7,5 +7,6 @@ export async function GET() {
       fast: FAST_MODEL,
       expert: EXPERT_MODEL,
     },
+    memawiExtractConsolid: process.env.MEMAWI_EXTRACT_CONSOLID === 'true',
   });
 }

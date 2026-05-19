@@ -4,10 +4,15 @@ import { predefinedAgents } from '../agents';
 import type { Agent } from '../types';
 import { buildAgentContextBlock } from '../context-optimizer';
 import * as memawi from '../memawi';
+import { requestApproval, needsApproval } from '../approval';
+import { checkToolResult, checkHallucination } from '../guardrails';
+import { saveCheckpoint, loadLatestCheckpoint } from '../checkpoint';
+import { DEFAULT_SETTINGS } from '../settings';
+import { isDbAvailable } from '../db';
 
 // Types for agent events and results
 export interface AgentEvent {
-  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error';
+  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'tool_approval_request' | 'checkpoint_saved' | 'guardrail_flagged';
   agentId: string;
   agentName?: string;
   content?: string;
@@ -15,6 +20,9 @@ export interface AgentEvent {
   input?: Record<string, unknown>;
   result?: unknown;
   tokens?: { input: number; output: number };
+  approval?: { id: string; agentId: string; agentName?: string; tool: string; input: Record<string, unknown> };
+  checkpoint?: { runId: string; iteration: number; timestamp: string };
+  guardrail?: { type: string; message: string; severity: 'low' | 'medium' | 'high' };
 }
 
 export interface AgentRunResult {
@@ -28,9 +36,13 @@ export interface AgentRunConfig {
   agent: Agent;
   goal: string;
   apiKey: string;
+  runId?: string;
   maxIterations?: number;
   maxTokens?: number;
   useMemory?: boolean;
+  hitlEnabled?: boolean;
+  guardrailsEnabled?: boolean;
+  checkpointingEnabled?: boolean;
   onEvent?: (event: AgentEvent) => void;
 }
 
@@ -42,12 +54,21 @@ export interface AgentRunConfig {
  * 3. If the response contains tool_use, execute tools and feed results back
  * 4. Loop until the agent produces a final text response (stop_reason: end_turn)
  * 5. Return the final result
+ *
+ * Optional features (controlled by AgentRunConfig flags):
+ * - HITL approval: pause before executing high-impact tools until client approves
+ * - Guardrails: validate tool results and final output for hallucination signals
+ * - Checkpointing: save conversation state after each iteration for crash recovery
  */
 export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRunResult> {
   const { agent, goal, apiKey, onEvent } = config;
   const maxIterations = config.maxIterations || 10;
   const maxTokens = config.maxTokens || agent.guardrails?.maxTokens || 4096;
   const model = getAgentModel(agent.model, agent.provider);
+  const hitlEnabled = config.hitlEnabled ?? false;
+  const guardrailsEnabled = config.guardrailsEnabled ?? false;
+  const checkpointingEnabled = config.checkpointingEnabled ?? false;
+  const runId = config.runId || `run-${Date.now()}`;
 
   const client = createAnthropicClient(apiKey);
 
@@ -56,7 +77,6 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
   const { definitions: tools, executors: toolExecutors } = getToolsForAgent(agent.id);
 
   // Retrieve agent context from Memawi memory if enabled
-  // This includes MEMORY.md (long-term), CONTEXT.md (session), TODO.md, and TaskList.md
   let contextPrefix = '';
   if (config.useMemory !== false) {
     try {
@@ -79,6 +99,35 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+
+  // Attempt to resume from a checkpoint if checkpointing is enabled
+  if (checkpointingEnabled) {
+    try {
+      if (await isDbAvailable()) {
+        const checkpoint = await loadLatestCheckpoint(runId, agent.id);
+        if (checkpoint) {
+          // Restore conversation state from checkpoint
+          const restoredMessages = Array.isArray(checkpoint.messages)
+            ? checkpoint.messages as Anthropic.MessageParam[]
+            : [];
+          if (restoredMessages.length > 0) {
+            messages.length = 0;
+            messages.push(...restoredMessages);
+            totalInputTokens = checkpoint.totalInputTokens;
+            totalOutputTokens = checkpoint.totalOutputTokens;
+            onEvent?.({
+              type: 'agent_thinking',
+              agentId: agent.id,
+              agentName: agent.name,
+              content: `Resumed from checkpoint at iteration ${checkpoint.iteration}`,
+            });
+          }
+        }
+      }
+    } catch {
+      // Checkpoint load failed — start fresh
+    }
+  }
 
   onEvent?.({
     type: 'agent_thinking',
@@ -119,6 +168,20 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
         );
         const finalText = textBlocks.map(b => b.text).join('\n');
 
+        // Guardrail check on final output
+        if (guardrailsEnabled) {
+          const guardResult = await checkHallucination(finalText, apiKey, goal);
+          if (guardResult.flagged) {
+            onEvent?.({
+              type: 'guardrail_flagged',
+              agentId: agent.id,
+              agentName: agent.name,
+              content: `Output flagged: ${guardResult.message}`,
+              guardrail: { type: guardResult.type || 'hallucination', message: guardResult.message || 'Hallucination detected', severity: guardResult.severity },
+            });
+          }
+        }
+
         onEvent?.({
           type: 'agent_complete',
           agentId: agent.id,
@@ -137,6 +200,16 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
             });
           } catch {
             // Memawi unavailable — continue without storing
+          }
+        }
+
+        // Clear checkpoints on successful completion
+        if (checkpointingEnabled) {
+          try {
+            const { clearCheckpoints } = await import('../checkpoint');
+            await clearCheckpoints(runId);
+          } catch {
+            // Ignore
           }
         }
 
@@ -164,24 +237,109 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
       if (toolUseBlocks.length > 0) {
         // Execute all tool calls in parallel
         const executionPromises = toolUseBlocks.map(async (block) => {
+          const toolInput = block.input as Record<string, unknown>;
+
           onEvent?.({
             type: 'tool_call',
             agentId: agent.id,
             agentName: agent.name,
             tool: block.name,
-            input: block.input as Record<string, unknown>,
+            input: toolInput,
           });
 
+          // HITL approval gate: if enabled and tool requires approval, pause and wait
+          if (hitlEnabled && needsApproval(block.name, agent.guardrails)) {
+            try {
+              const approvalResult = await requestApproval({
+                agentId: agent.id,
+                agentName: agent.name,
+                tool: block.name,
+                input: toolInput,
+              });
+
+              // Emit approval request event so SSE clients see it
+              onEvent?.({
+                type: 'tool_approval_request',
+                agentId: agent.id,
+                agentName: agent.name,
+                content: `Approval ${approvalResult.approved ? 'granted' : 'denied'} for ${block.name}`,
+                tool: block.name,
+                input: toolInput,
+                approval: {
+                  id: `approval-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  agentId: agent.id,
+                  agentName: agent.name,
+                  tool: block.name,
+                  input: approvalResult.modifiedInput || toolInput,
+                },
+              });
+
+              if (!approvalResult.approved) {
+                return {
+                  type: 'tool_result' as const,
+                  tool_use_id: block.id,
+                  content: JSON.stringify({ error: 'Tool execution denied by human operator' }),
+                };
+              }
+
+              // Use modified input if provided
+              const effectiveInput = approvalResult.modifiedInput || toolInput;
+              const executor = toolExecutors.get(block.name);
+              let result: Record<string, unknown>;
+              try {
+                result = executor ? await executor(effectiveInput) : { error: `Unknown tool: ${block.name}` };
+              } catch (error) {
+                result = { error: error instanceof Error ? error.message : 'Tool execution failed' };
+              }
+
+              onEvent?.({
+                type: 'tool_result',
+                agentId: agent.id,
+                agentName: agent.name,
+                tool: block.name,
+                result,
+              });
+
+              return {
+                type: 'tool_result' as const,
+                tool_use_id: block.id,
+                content: typeof result === 'string' ? result : JSON.stringify(result),
+              };
+            } catch (error) {
+              // Approval request timed out or failed
+              return {
+                type: 'tool_result' as const,
+                tool_use_id: block.id,
+                content: JSON.stringify({ error: error instanceof Error ? error.message : 'Approval request failed' }),
+              };
+            }
+          }
+
+          // Standard tool execution (no HITL)
           const executor = toolExecutors.get(block.name);
           let result: Record<string, unknown>;
           try {
             result = executor
-              ? await executor(block.input as Record<string, unknown>)
+              ? await executor(toolInput)
               : { error: `Unknown tool: ${block.name}` };
           } catch (error) {
             result = {
               error: error instanceof Error ? error.message : 'Tool execution failed',
             };
+          }
+
+          // Guardrail check on tool result
+          if (guardrailsEnabled) {
+            const guardResult = await checkToolResult(block.name, toolInput, result, apiKey);
+            if (guardResult.flagged) {
+              onEvent?.({
+                type: 'guardrail_flagged',
+                agentId: agent.id,
+                agentName: agent.name,
+                content: `Tool ${block.name} result flagged: ${guardResult.message}`,
+                guardrail: { type: guardResult.type || 'hallucination', message: guardResult.message || 'Hallucination detected', severity: guardResult.severity },
+              });
+            }
           }
 
           onEvent?.({
@@ -208,6 +366,36 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
         role: 'user',
         content: toolResults,
       });
+
+      // Save checkpoint after each iteration if checkpointing is enabled
+      if (checkpointingEnabled) {
+        try {
+          if (await isDbAvailable()) {
+            const saved = await saveCheckpoint({
+              id: `cp-${runId}-${agent.id}-${i}`,
+              runId,
+              agentId: agent.id,
+              iteration: i,
+              messages: messages as unknown[],
+              systemPrompt,
+              goal,
+              totalInputTokens,
+              totalOutputTokens,
+              createdAt: new Date(),
+            });
+            if (saved) {
+              onEvent?.({
+                type: 'checkpoint_saved',
+                agentId: agent.id,
+                agentName: agent.name,
+                checkpoint: { runId, iteration: i, timestamp: new Date().toISOString() },
+              });
+            }
+          }
+        } catch {
+          // Checkpoint save failed — execution continues
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error during agent execution';
       onEvent?.({

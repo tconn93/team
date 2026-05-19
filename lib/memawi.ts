@@ -444,6 +444,20 @@ export async function updateAgentTaskList(agentId: string, content: string): Pro
 }
 
 /**
+ * Consolidate/extract an agent's CONTEXT.md using Memawi's built-in
+ * LLM-powered extraction and consolidation endpoint.
+ * Returns the optimized context content.
+ */
+export async function consolidateAgentContext(agentId: string): Promise<string> {
+  const res = await memawiFetch(`/api/v1/agents/${agentId}/context/consolidate`, {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId }),
+  });
+  const data = await res.json();
+  return data.content || data.optimized_context || '';
+}
+
+/**
  * Estimate token count from text (rough: ~4 chars per token).
  */
 export function estimateTokens(text: string): number {

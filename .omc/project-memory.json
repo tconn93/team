@@ -42,7 +42,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npm run build 2>&1 | tail -25",
+    "buildCommand": "npm run build 2>&1 | tail -30",
     "testCommand": "npm test",
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
@@ -151,14 +151,20 @@
     },
     {
       "path": "lib/anthropic/tools.ts",
-      "accessCount": 18,
-      "lastAccessed": 1779214800314,
+      "accessCount": 24,
+      "lastAccessed": 1779217713829,
       "type": "file"
     },
     {
       "path": "lib/anthropic/agent-runner.ts",
-      "accessCount": 17,
-      "lastAccessed": 1779215634587,
+      "accessCount": 22,
+      "lastAccessed": 1779224264632,
+      "type": "file"
+    },
+    {
+      "path": "lib/store.ts",
+      "accessCount": 21,
+      "lastAccessed": 1779224108580,
       "type": "file"
     },
     {
@@ -168,15 +174,15 @@
       "type": "file"
     },
     {
-      "path": "components/AgentEditor.tsx",
-      "accessCount": 16,
-      "lastAccessed": 1779216272367,
+      "path": "lib/anthropic/coordinator.ts",
+      "accessCount": 17,
+      "lastAccessed": 1779224181671,
       "type": "file"
     },
     {
-      "path": "lib/anthropic/coordinator.ts",
-      "accessCount": 14,
-      "lastAccessed": 1779216121727,
+      "path": "components/AgentEditor.tsx",
+      "accessCount": 16,
+      "lastAccessed": 1779216272367,
       "type": "file"
     },
     {
@@ -186,9 +192,9 @@
       "type": "file"
     },
     {
-      "path": "lib/store.ts",
+      "path": ".env.example",
       "accessCount": 12,
-      "lastAccessed": 1779215135499,
+      "lastAccessed": 1779221577887,
       "type": "file"
     },
     {
@@ -198,15 +204,27 @@
       "type": "file"
     },
     {
-      "path": ".env.example",
-      "accessCount": 8,
-      "lastAccessed": 1779216284027,
+      "path": "lib/memawi.ts",
+      "accessCount": 10,
+      "lastAccessed": 1779220377624,
       "type": "file"
     },
     {
-      "path": "lib/memawi.ts",
+      "path": "app/api/memory/route.ts",
       "accessCount": 8,
-      "lastAccessed": 1779216860035,
+      "lastAccessed": 1779220390885,
+      "type": "file"
+    },
+    {
+      "path": "lib/types.ts",
+      "accessCount": 8,
+      "lastAccessed": 1779224029864,
+      "type": "file"
+    },
+    {
+      "path": "components/SettingsModal.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1779224234625,
       "type": "file"
     },
     {
@@ -228,21 +246,45 @@
       "type": "file"
     },
     {
-      "path": "components/SettingsModal.tsx",
+      "path": "lib/context-optimizer.ts",
+      "accessCount": 6,
+      "lastAccessed": 1779220341971,
+      "type": "file"
+    },
+    {
+      "path": ".env",
+      "accessCount": 6,
+      "lastAccessed": 1779221571271,
+      "type": "file"
+    },
+    {
+      "path": "next.config.mjs",
+      "accessCount": 6,
+      "lastAccessed": 1779224456576,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/client.ts",
       "accessCount": 5,
-      "lastAccessed": 1779208866895,
+      "lastAccessed": 1779221552596,
       "type": "file"
     },
     {
-      "path": "lib/types.ts",
-      "accessCount": 4,
-      "lastAccessed": 1779214771619,
+      "path": "app/api/run/route.ts",
+      "accessCount": 5,
+      "lastAccessed": 1779224190543,
       "type": "file"
     },
     {
-      "path": "app/api/memory/route.ts",
+      "path": "lib/db.ts",
       "accessCount": 4,
-      "lastAccessed": 1779215721532,
+      "lastAccessed": 1779224064611,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 4,
+      "lastAccessed": 1779224454185,
       "type": "file"
     },
     {
@@ -255,12 +297,6 @@
       "path": "app/actions.ts",
       "accessCount": 3,
       "lastAccessed": 1779208808930,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 3,
-      "lastAccessed": 1779208817948,
       "type": "file"
     },
     {
@@ -294,27 +330,27 @@
       "type": "file"
     },
     {
-      "path": "next.config.mjs",
-      "accessCount": 3,
-      "lastAccessed": 1779215188003,
-      "type": "file"
-    },
-    {
-      "path": "lib/anthropic/client.ts",
-      "accessCount": 3,
-      "lastAccessed": 1779216094364,
-      "type": "file"
-    },
-    {
-      "path": "lib/context-optimizer.ts",
-      "accessCount": 3,
-      "lastAccessed": 1779216139674,
-      "type": "file"
-    },
-    {
       "path": "app/api/test-connection/route.ts",
       "accessCount": 3,
       "lastAccessed": 1779216209445,
+      "type": "file"
+    },
+    {
+      "path": "app/api/config/route.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779220408206,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1779220760056,
+      "type": "file"
+    },
+    {
+      "path": "lib/models.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779221546679,
       "type": "file"
     },
     {
@@ -324,21 +360,21 @@
       "type": "file"
     },
     {
-      "path": "app/api/run/route.ts",
+      "path": "lib/task-files.ts",
       "accessCount": 2,
-      "lastAccessed": 1779214812933,
+      "lastAccessed": 1779217003940,
       "type": "file"
     },
     {
-      "path": ".env",
+      "path": "tsconfig.json",
       "accessCount": 2,
-      "lastAccessed": 1779216313225,
+      "lastAccessed": 1779224456834,
       "type": "file"
     },
     {
-      "path": "README.md",
-      "accessCount": 1,
-      "lastAccessed": 1779207579763,
+      "path": "Dockerfile",
+      "accessCount": 2,
+      "lastAccessed": 1779224468414,
       "type": "file"
     },
     {
@@ -384,27 +420,9 @@
       "type": "file"
     },
     {
-      "path": "Dockerfile",
-      "accessCount": 1,
-      "lastAccessed": 1779207595081,
-      "type": "file"
-    },
-    {
-      "path": "tsconfig.json",
-      "accessCount": 1,
-      "lastAccessed": 1779207595590,
-      "type": "file"
-    },
-    {
       "path": "TODO.md.bak",
       "accessCount": 1,
       "lastAccessed": 1779207597011,
-      "type": "file"
-    },
-    {
-      "path": "lib/db.ts",
-      "accessCount": 1,
-      "lastAccessed": 1779214849943,
       "type": "file"
     },
     {
@@ -423,24 +441,6 @@
       "path": "app/api/runs/route.ts",
       "accessCount": 1,
       "lastAccessed": 1779215121757,
-      "type": "file"
-    },
-    {
-      "path": "lib/models.ts",
-      "accessCount": 1,
-      "lastAccessed": 1779216085869,
-      "type": "file"
-    },
-    {
-      "path": "app/api/config/route.ts",
-      "accessCount": 1,
-      "lastAccessed": 1779216229338,
-      "type": "file"
-    },
-    {
-      "path": "lib/task-files.ts",
-      "accessCount": 1,
-      "lastAccessed": 1779216886273,
       "type": "file"
     }
   ],

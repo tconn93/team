@@ -142,6 +142,14 @@ export async function POST(request: Request) {
         await memawi.updateAgentContext(body.agentId || 'coordinator', body.content || '');
         return Response.json({ updated: true });
       }
+      case 'update-todo': {
+        await memawi.updateAgentTodoFile(body.agentId || 'coordinator', body.content || '');
+        return Response.json({ updated: true });
+      }
+      case 'update-tasklist': {
+        await memawi.updateAgentTaskList(body.agentId || 'coordinator', body.content || '');
+        return Response.json({ updated: true });
+      }
       case 'optimize-context': {
         const apiKey = body.apiKey || process.env.ANTHROPIC_API_KEY;
         if (!apiKey) {
@@ -154,7 +162,7 @@ export async function POST(request: Request) {
         return Response.json(result);
       }
       default:
-        return Response.json({ error: `Unknown action: ${action}. Valid: remember, ingest, store-todo, file-context, task-result, consolidate, update-memory, update-context, optimize-context` }, { status: 400 });
+        return Response.json({ error: `Unknown action: ${action}. Valid: remember, ingest, store-todo, file-context, task-result, consolidate, update-memory, update-context, update-todo, update-tasklist, optimize-context` }, { status: 400 });
     }
   } catch (error) {
     return Response.json({

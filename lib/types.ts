@@ -74,9 +74,25 @@ export interface ToolDefinition {
   execute: (args: unknown) => Promise<unknown>;
 }
 
+// HITL approval request (emitted via SSE to client)
+export interface ApprovalRequest {
+  id: string;
+  agentId: string;
+  agentName?: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+// Global app settings (persisted to DB)
+export interface AppSettings {
+  hitlEnabled: boolean;
+  guardrailsEnabled: boolean;
+  checkpointingEnabled: boolean;
+}
+
 // New types for Anthropic agent events (SSE stream)
 export interface StreamEvent {
-  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'mission_complete' | 'plan_created';
+  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'mission_complete' | 'plan_created' | 'tool_approval_request' | 'checkpoint_saved' | 'guardrail_flagged';
   agentId: string;
   agentName?: string;
   content?: string;
@@ -86,4 +102,7 @@ export interface StreamEvent {
   tokens?: { input: number; output: number };
   timestamp?: string;
   plan?: ExecutionPlan;
+  approval?: ApprovalRequest;
+  checkpoint?: { runId: string; iteration: number; timestamp: string };
+  guardrail?: { type: string; message: string; severity: 'low' | 'medium' | 'high' };
 }

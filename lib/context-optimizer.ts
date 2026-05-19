@@ -5,6 +5,10 @@ import * as memawi from './memawi';
 
 const CONTEXT_TOKEN_LIMIT = 300_000;
 
+// When true, use Memawi's API for context extraction/consolidation.
+// When false (default), use the local FAST_MODEL for context management.
+const USE_MEMAWI_EXTRACT = process.env.MEMAWI_EXTRACT_CONSOLID === 'true';
+
 const OPTIMIZER_SYSTEM_PROMPT = `You are a context optimization agent. Your job is to compress and optimize an AI agent's session context (CONTEXT.md) while preserving all critical information.
 
 Rules for optimization:
@@ -34,6 +38,7 @@ export interface OptimizationResult {
 
 /**
  * Check if an agent's context needs optimization and run it if needed.
+ * Routes to either Memawi's consolidate endpoint or local FAST_MODEL based on MEMAWI_EXTRACT_CONSOLID.
  * Returns null if no optimization was needed.
  */
 export async function optimizeIfNeeded(
@@ -47,9 +52,15 @@ export async function optimizeIfNeeded(
   }
 
   const originalTokens = memawi.estimateTokens(context);
-  console.log(`[ContextOptimizer] Agent ${agentId}: context is ${originalTokens} tokens (limit: ${CONTEXT_TOKEN_LIMIT}), optimizing...`);
+  console.log(`[ContextOptimizer] Agent ${agentId}: context is ${originalTokens} tokens (limit: ${CONTEXT_TOKEN_LIMIT}), optimizing via ${USE_MEMAWI_EXTRACT ? 'Memawi' : 'local FAST_MODEL'}...`);
 
-  const result = await optimizeContext(context, apiKey);
+  let result: OptimizationResult;
+
+  if (USE_MEMAWI_EXTRACT) {
+    result = await optimizeContextViaMemawi(agentId, context);
+  } else {
+    result = await optimizeContextViaLLM(context, apiKey);
+  }
 
   // Update the agent's context with the optimized version
   await memawi.updateAgentContext(agentId, result.content);
@@ -60,9 +71,27 @@ export async function optimizeIfNeeded(
 }
 
 /**
- * Optimize a context string by calling the Anthropic API to compress it.
+ * Optimize context using Memawi's consolidate/extract API endpoint.
  */
-async function optimizeContext(context: string, apiKey: string): Promise<OptimizationResult> {
+async function optimizeContextViaMemawi(agentId: string, context: string): Promise<OptimizationResult> {
+  const originalTokens = memawi.estimateTokens(context);
+
+  const result = await memawi.consolidateAgentContext(agentId);
+
+  const optimizedTokens = memawi.estimateTokens(result);
+
+  return {
+    originalTokens,
+    optimizedTokens,
+    compressionRatio: originalTokens > 0 ? 1 - optimizedTokens / originalTokens : 0,
+    content: result || context,
+  };
+}
+
+/**
+ * Optimize context by calling the Anthropic API to compress it (local FAST_MODEL).
+ */
+async function optimizeContextViaLLM(context: string, apiKey: string): Promise<OptimizationResult> {
   const client = createAnthropicClient(apiKey);
   const originalTokens = memawi.estimateTokens(context);
 
@@ -85,7 +114,7 @@ ${context}
   });
 
   const optimizedContent = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
     .join('\n');
 
@@ -124,7 +153,6 @@ export async function buildAgentContextBlock(
       optimizeIfNeeded(agentId, apiKey).catch(err => {
         console.error(`[ContextOptimizer] Failed to optimize context for ${agentId}:`, err);
       });
-      // For now, include the full context — the next run will get the optimized version
     }
     parts.push(`<session-context>\n${metadata.context}\n</session-context>`);
   }

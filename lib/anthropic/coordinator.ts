@@ -79,9 +79,15 @@ export interface MissionResult {
 
 export class Coordinator {
   private apiKey: string;
+  private hitlEnabled: boolean;
+  private guardrailsEnabled: boolean;
+  private checkpointingEnabled: boolean;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, settings?: { hitlEnabled?: boolean; guardrailsEnabled?: boolean; checkpointingEnabled?: boolean }) {
     this.apiKey = apiKey;
+    this.hitlEnabled = settings?.hitlEnabled ?? false;
+    this.guardrailsEnabled = settings?.guardrailsEnabled ?? false;
+    this.checkpointingEnabled = settings?.checkpointingEnabled ?? false;
   }
 
   /**
@@ -146,7 +152,11 @@ export class Coordinator {
           agent,
           goal: taskGoal,
           apiKey: this.apiKey,
+          runId: `mission-${Date.now()}`,
           maxIterations: 8,
+          hitlEnabled: this.hitlEnabled,
+          guardrailsEnabled: this.guardrailsEnabled,
+          checkpointingEnabled: this.checkpointingEnabled,
           onEvent,
         });
 

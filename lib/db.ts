@@ -148,6 +148,26 @@ export async function initSchema(): Promise<void> {
       result TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS checkpoints (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      iteration INTEGER NOT NULL,
+      messages JSONB DEFAULT '[]'::jsonb,
+      system_prompt TEXT DEFAULT '',
+      goal TEXT DEFAULT '',
+      total_input_tokens INTEGER DEFAULT 0,
+      total_output_tokens INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(run_id, agent_id, iteration)
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Add indexes for common queries
@@ -157,6 +177,7 @@ export async function initSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks (assigned_agent);
     CREATE INDEX IF NOT EXISTS idx_runs_status ON runs (status);
     CREATE INDEX IF NOT EXISTS idx_agent_memory_agent ON agent_memory (agent_id);
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_run ON checkpoints (run_id, agent_id);
   `);
 }
 

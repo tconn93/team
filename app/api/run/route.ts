@@ -1,5 +1,7 @@
 import { Coordinator } from '@/lib/anthropic/coordinator';
 import type { AgentEvent } from '@/lib/anthropic/agent-runner';
+import { loadSettings } from '@/lib/settings';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120; // Allow up to 2 minutes for long missions
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
           timestamp: new Date().toISOString(),
         });
 
-        const coordinator = new Coordinator(anthropicKey);
+        const coordinator = new Coordinator(anthropicKey, await loadSettings());
         const result = await coordinator.runMission(goal, (event: AgentEvent) => {
           sendEvent({ ...event, timestamp: new Date().toISOString() });
         });
