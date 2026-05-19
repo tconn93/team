@@ -12,7 +12,7 @@ import { isDbAvailable } from '../db';
 
 // Types for agent events and results
 export interface AgentEvent {
-  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'tool_approval_request' | 'checkpoint_saved' | 'guardrail_flagged';
+  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'tool_approval_request' | 'checkpoint_saved' | 'guardrail_flagged' | 'user_question';
   agentId: string;
   agentName?: string;
   content?: string;
@@ -23,6 +23,7 @@ export interface AgentEvent {
   approval?: { id: string; agentId: string; agentName?: string; tool: string; input: Record<string, unknown> };
   checkpoint?: { runId: string; iteration: number; timestamp: string };
   guardrail?: { type: string; message: string; severity: 'low' | 'medium' | 'high' };
+  question?: { id: string; agentId: string; question: string; options?: string[] };
 }
 
 export interface AgentRunResult {
@@ -313,6 +314,52 @@ export async function runAgentWithGoal(config: AgentRunConfig): Promise<AgentRun
                 content: JSON.stringify({ error: error instanceof Error ? error.message : 'Approval request failed' }),
               };
             }
+          }
+
+          // Ask-user tool: emit question event before blocking for response
+          if (block.name === 'ask_user') {
+            const questionText = (toolInput.question as string) || 'No question provided';
+            const options = toolInput.options as string[] | undefined;
+
+            onEvent?.({
+              type: 'user_question',
+              agentId: agent.id,
+              agentName: agent.name,
+              content: `Question: ${questionText}`,
+              question: {
+                id: `question-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                agentId: agent.id,
+                question: questionText,
+                options,
+              },
+            });
+
+            // The executor will block until the user responds via /api/run/respond
+            const executor = toolExecutors.get('ask_user');
+            let result: Record<string, unknown>;
+            try {
+              result = executor
+                ? await executor({ ...toolInput, _agentId: agent.id })
+                : { error: 'Unknown tool: ask_user' };
+            } catch (error) {
+              result = {
+                error: error instanceof Error ? error.message : 'Question request failed',
+              };
+            }
+
+            onEvent?.({
+              type: 'tool_result',
+              agentId: agent.id,
+              agentName: agent.name,
+              tool: block.name,
+              result,
+            });
+
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: block.id,
+              content: typeof result === 'string' ? result : JSON.stringify(result),
+            };
           }
 
           // Standard tool execution (no HITL)

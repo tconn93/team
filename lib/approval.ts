@@ -109,6 +109,6 @@ export function needsApproval(
   if (agentGuardrails?.requireApproval) return true;
 
   // High-impact tools always require approval
-  const highImpactTools = ['code_execution', 'file_write', 'file_edit'];
+  const highImpactTools = ['bash', 'file_write', 'file_edit'];
   return highImpactTools.includes(tool);
 }

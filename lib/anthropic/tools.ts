@@ -1,6 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { predefinedAgents } from '../agents';
 import * as memawi from '../memawi';
+import { createAnthropicClient } from './client';
+import { FAST_MODEL } from '../models';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as path from 'path';
+
+const execAsync = promisify(exec);
 
 /**
  * Sandbox all file operations to the project workspace directory.
@@ -10,109 +17,190 @@ import * as memawi from '../memawi';
 const WORKSPACE_ROOT = process.cwd();
 
 function sandboxPath(relativePath: string): { fullPath: string; safe: string } | { error: string } {
-  const pathModule = require('path');
-  const resolved = pathModule.resolve(WORKSPACE_ROOT, relativePath);
-  const normalizedRoot = pathModule.resolve(WORKSPACE_ROOT);
+  const resolved = path.resolve(WORKSPACE_ROOT, relativePath);
+  const normalizedRoot = path.resolve(WORKSPACE_ROOT);
 
-  if (!resolved.startsWith(normalizedRoot + pathModule.sep) && resolved !== normalizedRoot) {
+  if (!resolved.startsWith(normalizedRoot + path.sep) && resolved !== normalizedRoot) {
     return { error: `Access denied: path escapes workspace. Requested: ${relativePath}` };
   }
 
-  return { fullPath: resolved, safe: pathModule.relative(normalizedRoot, resolved) };
+  return { fullPath: resolved, safe: path.relative(normalizedRoot, resolved) };
+}
+
+/** Block dangerous shell commands. */
+const BLOCKED_COMMANDS = [
+  /\brm\s+-rf\s+\/\b/i,
+  /\brm\s+-rf\s+~\b/i,
+  /\bsudo\b/i,
+  /\bchmod\s+777\b/i,
+  /\bdd\s+if=/i,
+  /\bmkfs\b/i,
+  /\bformat\b/i,
+  />\s*\/dev\/sd/i,
+  /\bshutdown\b/i,
+  /\breboot\b/i,
+  /\binit\s+[06]/i,
+  /\bsystemctl\s+(stop|disable|mask)\s+(sshd|ssh|firewall)/i,
+];
+
+function isCommandBlocked(command: string): string | null {
+  for (const pattern of BLOCKED_COMMANDS) {
+    if (pattern.test(command)) {
+      return `Command blocked for safety: "${command.substring(0, 80)}" matches a dangerous pattern`;
+    }
+  }
+  return null;
+}
+
+/** Recursively walk a directory and collect file paths matching a glob pattern. */
+async function walkDir(dir: string, pattern: RegExp, rootDir: string, maxResults: number): Promise<string[]> {
+  const fs = await import('fs');
+  const results: string[] = [];
+  const skipDirs = new Set(['node_modules', '.git', '.next', '__pycache__', '.venv', 'dist', 'build']);
+
+  async function walk(currentDir: string): Promise<void> {
+    if (results.length >= maxResults) return;
+    let entries: { name: string; isDirectory(): boolean; isFile(): boolean }[];
+    try {
+      entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (results.length >= maxResults) break;
+      const fullPath = path.join(currentDir, entry.name);
+      const relativePath = path.relative(rootDir, fullPath);
+
+      if (entry.isDirectory()) {
+        if (!skipDirs.has(entry.name) && !entry.name.startsWith('.')) {
+          await walk(fullPath);
+        }
+      } else if (pattern.test(relativePath) || pattern.test(entry.name)) {
+        results.push(relativePath);
+      }
+    }
+  }
+
+  await walk(dir);
+  return results;
+}
+
+/** Convert a glob pattern string to a RegExp. */
+function globToRegex(pattern: string): RegExp {
+  let regex = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*/g, '{{GLOBSTAR}}')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]')
+    .replace(/\{\{GLOBSTAR\}\}/g, '.*');
+  return new RegExp(regex, 'i');
+}
+
+/** Search files for a regex pattern, returning matches with context. */
+async function searchFiles(
+  rootDir: string,
+  pattern: RegExp,
+  includePattern: RegExp | null,
+  contextLines: number,
+  maxResults: number,
+): Promise<{ file: string; line: number; content: string; context?: string }[]> {
+  const fs = await import('fs');
+  const results: { file: string; line: number; content: string; context?: string }[] = [];
+
+  async function searchDir(currentDir: string): Promise<void> {
+    let entries: { name: string; isDirectory(): boolean; isFile(): boolean }[];
+    try {
+      entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const skipDirs = new Set(['node_modules', '.git', '.next', '__pycache__', '.venv', 'dist', 'build']);
+    const binaryExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.zip', '.gz', '.tar', '.rar', '.7z', '.pdf', '.doc', '.docx', '.xlsx', '.pptx']);
+
+    for (const entry of entries) {
+      if (results.length >= maxResults) break;
+      const fullPath = path.join(currentDir, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!skipDirs.has(entry.name) && !entry.name.startsWith('.')) {
+          await searchDir(fullPath);
+        }
+      } else {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (binaryExts.has(ext)) continue;
+        if (includePattern && !includePattern.test(entry.name) && !includePattern.test(fullPath)) continue;
+
+        try {
+          const content = await fs.promises.readFile(fullPath, 'utf-8');
+          const lines = content.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (results.length >= maxResults) break;
+            if (pattern.test(lines[i])) {
+              const contextStart = Math.max(0, i - contextLines);
+              const contextEnd = Math.min(lines.length - 1, i + contextLines);
+              const contextStr = contextLines > 0
+                ? lines.slice(contextStart, contextEnd + 1).map((l, idx) => `${contextStart + idx + 1}: ${l}`).join('\n')
+                : undefined;
+              results.push({
+                file: path.relative(rootDir, fullPath),
+                line: i + 1,
+                content: lines[i].trim(),
+                context: contextStr,
+              });
+            }
+          }
+        } catch {
+          // Skip files we can't read
+        }
+      }
+    }
+  }
+
+  await searchDir(rootDir);
+  return results;
 }
 
 // Tool definitions in Anthropic's format
 export const toolDefinitions: Anthropic.Tool[] = [
   {
-    name: 'web_search',
+    name: 'bash',
     description:
-      'Search the web for information. Returns relevant results with titles, snippets, and URLs. Use this to find current data, research topics, and gather information from multiple sources.',
+      'Execute a shell command in the project workspace. Returns stdout, stderr, and exit code. Use this for running scripts, installing packages, git operations, and other system commands. Commands run with the project root as the working directory.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        query: {
+        command: {
           type: 'string' as const,
-          description: 'The search query',
+          description: 'The shell command to execute',
         },
-        numResults: {
+        timeout: {
           type: 'number' as const,
-          description: 'Number of results to return (default 5)',
+          description: 'Timeout in milliseconds (default 30000, max 120000)',
         },
       },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'code_execution',
-    description:
-      'Execute JavaScript code in a sandboxed environment for calculations, data processing, and analysis. Returns the output of the code execution. Use this for mathematical computations, data transformations, and generating structured results.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        code: {
-          type: 'string' as const,
-          description: 'JavaScript code to execute. Must return a value or assign to a variable named "result".',
-        },
-        purpose: {
-          type: 'string' as const,
-          description: 'Brief description of what this code is meant to compute',
-        },
-      },
-      required: ['code'],
-    },
-  },
-  {
-    name: 'analyze_data',
-    description:
-      'Analyze data and provide structured insights. Pass in a data type and query, and receive a detailed analysis with key findings, trends, and recommendations.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        dataType: {
-          type: 'string' as const,
-          description: 'The type of data to analyze (e.g., "market", "financial", "customer", "competitor")',
-        },
-        query: {
-          type: 'string' as const,
-          description: 'The specific question or analysis request',
-        },
-        context: {
-          type: 'string' as const,
-          description: 'Additional context or constraints for the analysis',
-        },
-      },
-      required: ['dataType', 'query'],
-    },
-  },
-  {
-    name: 'generate_image',
-    description:
-      'Generate a visual asset such as a chart description, diagram layout, or image prompt. Returns a description and URL for a generated visual.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        prompt: {
-          type: 'string' as const,
-          description: 'Detailed description of the image or visual to generate',
-        },
-        style: {
-          type: 'string' as const,
-          description: 'Visual style (e.g., "professional", "infographic", "minimal", "corporate")',
-        },
-      },
-      required: ['prompt'],
+      required: ['command'] as const,
     },
   },
   {
     name: 'file_read',
     description:
-      'Read the contents of a file from the project. Use this to examine code, configs, or any text file. Returns the raw file content without any encoding — what you see is exactly what is stored on disk.',
+      'Read the contents of a file from the project. Returns the file content with line numbers. Supports offset and limit for reading specific sections of large files.',
     input_schema: {
       type: 'object' as const,
       properties: {
         path: {
           type: 'string' as const,
           description: 'Path to the file relative to the project root (e.g., "lib/agents.ts", "README.md")',
+        },
+        offset: {
+          type: 'number' as const,
+          description: 'Line number to start reading from (1-indexed). Defaults to 1 (start of file).',
+        },
+        limit: {
+          type: 'number' as const,
+          description: 'Maximum number of lines to read. Defaults to 2000.',
         },
       },
       required: ['path'] as const,
@@ -121,7 +209,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: 'file_write',
     description:
-      'Write content to a file, creating it if it doesn\'t exist or overwriting if it does. Content is written as-is without any encoding or escaping — the string you provide becomes the exact file contents. If the content appears to be HTML-encoded (containing &amp;, &lt;, &gt;, &quot;), it will be decoded before writing.',
+      'Write content to a file, creating it if it doesn\'t exist or overwriting if it does. Content is written as-is without any encoding or escaping.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -144,7 +232,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: 'file_edit',
     description:
-      'Edit a specific part of a file by replacing old text with new text. Like Claude Code\'s Edit tool — finds the exact old_string in the file and replaces it with new_string. Content is handled as raw text with no encoding/decoding needed.',
+      'Edit a specific part of a file by replacing old text with new text. The old_string must be unique in the file. Content is handled as raw text.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -165,9 +253,147 @@ export const toolDefinitions: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'glob',
+    description:
+      'Find files matching a glob pattern. Returns a list of matching file paths relative to the project root. Use this to discover files by name pattern (e.g., "**/*.ts", "src/**/*.css").',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        pattern: {
+          type: 'string' as const,
+          description: 'Glob pattern to match (e.g., "**/*.ts", "lib/**/*.json", "*.md")',
+        },
+        path: {
+          type: 'string' as const,
+          description: 'Directory to search in, relative to project root. Defaults to project root.',
+        },
+      },
+      required: ['pattern'] as const,
+    },
+  },
+  {
+    name: 'grep',
+    description:
+      'Search for a pattern across files in the project. Returns matching lines with file paths, line numbers, and optional context. Supports regex patterns.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        pattern: {
+          type: 'string' as const,
+          description: 'Regular expression pattern to search for',
+        },
+        path: {
+          type: 'string' as const,
+          description: 'Directory to search in, relative to project root. Defaults to project root.',
+        },
+        include: {
+          type: 'string' as const,
+          description: 'File name pattern to include (e.g., "*.ts", "*.json"). Defaults to all files.',
+        },
+        context: {
+          type: 'number' as const,
+          description: 'Number of context lines to show around each match (default 2)',
+        },
+      },
+      required: ['pattern'] as const,
+    },
+  },
+  {
+    name: 'list_directory',
+    description:
+      'List files and directories at a given path. Returns entries with name, type (file/directory), and size.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path: {
+          type: 'string' as const,
+          description: 'Directory path relative to project root. Defaults to project root.',
+        },
+      },
+      required: [] as const,
+    },
+  },
+  {
+    name: 'web_search',
+    description:
+      'Search the web for information. Returns real results with titles, snippets, and URLs. Requires a configured search provider (Brave Search, SearXNG, or SerpAPI). Falls back to a helpful error if no provider is configured.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string' as const,
+          description: 'The search query',
+        },
+        numResults: {
+          type: 'number' as const,
+          description: 'Number of results to return (default 5)',
+        },
+      },
+      required: ['query'] as const,
+    },
+  },
+  {
+    name: 'web_fetch',
+    description:
+      'Fetch content from a URL and extract the main text content. Useful for reading web pages, documentation, and API responses. Returns the page content as cleaned text.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        url: {
+          type: 'string' as const,
+          description: 'The URL to fetch content from',
+        },
+        prompt: {
+          type: 'string' as const,
+          description: 'Optional prompt describing what information to extract from the page',
+        },
+      },
+      required: ['url'] as const,
+    },
+  },
+  {
+    name: 'ask_user',
+    description:
+      'Ask the user a question and wait for their response. Use this when you need clarification, confirmation, or a decision from the user before proceeding. Supports optional multiple-choice answers.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        question: {
+          type: 'string' as const,
+          description: 'The question to ask the user',
+        },
+        options: {
+          type: 'array' as const,
+          items: { type: 'string' as const },
+          description: 'Optional list of choices for the user to select from',
+        },
+      },
+      required: ['question'] as const,
+    },
+  },
+  {
+    name: 'analyze_data',
+    description:
+      'Analyze data using an LLM. Provide the data and a question, and receive structured analysis with key findings, patterns, and recommendations. Supports any data format (JSON, CSV, text, etc.).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        data: {
+          type: 'string' as const,
+          description: 'The data to analyze. Can be JSON, CSV, plain text, or any structured format.',
+        },
+        question: {
+          type: 'string' as const,
+          description: 'The specific question or analysis request about the data',
+        },
+      },
+      required: ['data', 'question'] as const,
+    },
+  },
+  {
     name: 'remember',
     description:
-      'Store a fact, insight, or piece of information in your persistent memory. Use this to save important findings, user preferences, or context that should persist across tasks. Stored memories are available for future recall.',
+      'Store a fact, insight, or piece of information in your persistent memory. Use this to save important findings, user preferences, or context that should persist across tasks.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -191,7 +417,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
   {
     name: 'recall',
     description:
-      'Search your persistent memory for relevant information. Use this to recall facts, preferences, or context from previous tasks and conversations. Always check memory before starting research you may have already done.',
+      'Search your persistent memory for relevant information. Use this to recall facts, preferences, or context from previous tasks and conversations.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -211,88 +437,67 @@ export const toolDefinitions: Anthropic.Tool[] = [
 
 // Tool execution functions
 export const toolExecutors = new Map<string, (input: Record<string, unknown>) => Promise<Record<string, unknown>>>([
-  ['web_search', async (input) => {
-    const query = input.query as string;
-    const numResults = (input.numResults as number) || 5;
-    console.log(`[Tool:web_search] Query: "${query}", numResults: ${numResults}`);
-    return {
-      query,
-      results: generateSearchResults(query, numResults),
-      totalFound: numResults * 5,
-    };
-  }],
+  ['bash', async (input) => {
+    const command = input.command as string;
+    const timeout = Math.min((input.timeout as number) || 30000, 120000);
+    console.log(`[Tool:bash] Command: "${command.substring(0, 100)}"`);
 
-  ['code_execution', async (input) => {
-    const code = input.code as string;
-    const purpose = (input.purpose as string) || 'computation';
-    console.log(`[Tool:code_execution] Purpose: ${purpose}`);
+    const blocked = isCommandBlocked(command);
+    if (blocked) return { error: blocked, exitCode: 1 };
+
     try {
-      const safeGlobals = {
-        Math,
-        JSON,
-        Date,
-        Array,
-        Object,
-        Number,
-        String,
-        parseInt,
-        parseFloat,
-        isNaN,
-        console: { log: (...args: unknown[]) => args.join(' ') },
-      };
-      const fn = new Function(...Object.keys(safeGlobals), `"use strict"; ${code}; return typeof result !== 'undefined' ? result : undefined;`);
-      const execResult = fn(...Object.values(safeGlobals));
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: WORKSPACE_ROOT,
+        timeout,
+        maxBuffer: 1024 * 1024, // 1MB
+      });
       return {
-        success: true,
-        output: execResult !== undefined ? String(execResult) : 'Code executed successfully (no return value)',
-        result: typeof execResult === 'object' ? execResult : undefined,
+        stdout: stdout.substring(0, 50000),
+        stderr: stderr.substring(0, 10000),
+        exitCode: 0,
       };
-    } catch (error) {
+    } catch (error: unknown) {
+      const execError = error as { stdout?: string; stderr?: string; code?: number; killed?: boolean };
       return {
-        success: false,
-        output: `Execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        result: undefined,
+        stdout: (execError.stdout || '').substring(0, 50000),
+        stderr: (execError.stderr || '').substring(0, 10000),
+        exitCode: execError.killed ? -1 : (execError.code || 1),
+        error: execError.killed ? `Command timed out after ${timeout}ms` : undefined,
       };
     }
   }],
 
-  ['analyze_data', async (input) => {
-    const dataType = input.dataType as string;
-    const query = input.query as string;
-    const context = (input.context as string) || '';
-    console.log(`[Tool:analyze_data] Type: ${dataType}, Query: ${query}`);
-    return {
-      dataType,
-      query,
-      insights: generateAnalysisInsights(dataType, query),
-      summary: `Analysis of ${dataType} data for: "${query}". Key patterns identified with actionable recommendations.`,
-      confidence: 'high',
-    };
-  }],
-
-  ['generate_image', async (input) => {
-    const prompt = input.prompt as string;
-    const style = (input.style as string) || 'professional';
-    console.log(`[Tool:generate_image] Prompt: "${prompt}", Style: ${style}`);
-    const seed = Math.floor(Math.random() * 1000);
-    return {
-      imageUrl: `https://picsum.photos/seed/${seed}/800/600`,
-      alt: prompt,
-      style,
-      generatedPrompt: prompt,
-    };
-  }],
-
   ['file_read', async (input) => {
     const filePath = input.path as string;
-    console.log(`[Tool:file_read] Reading: ${filePath}`);
+    const offset = (input.offset as number) || 1;
+    const limit = (input.limit as number) || 2000;
+    console.log(`[Tool:file_read] Reading: ${filePath} (offset: ${offset}, limit: ${limit})`);
+
     const sandboxed = sandboxPath(filePath);
     if ('error' in sandboxed) return { error: sandboxed.error };
+
     const fs = await import('fs');
     try {
       const content = fs.readFileSync(sandboxed.fullPath, 'utf-8');
-      const lines = content.split('\n').length;
-      return { path: sandboxed.safe, content, lines, size: content.length };
+      const allLines = content.split('\n');
+      const startLine = Math.max(1, offset) - 1;
+      const endLine = Math.min(allLines.length, startLine + limit);
+      const selectedLines = allLines.slice(startLine, endLine);
+
+      // Format with line numbers like cat -n
+      const numberedContent = selectedLines
+        .map((line, idx) => `${startLine + idx + 1}\t${line}`)
+        .join('\n');
+
+      return {
+        path: sandboxed.safe,
+        content: numberedContent,
+        totalLines: allLines.length,
+        shownLines: selectedLines.length,
+        startLine: startLine + 1,
+        endLine: endLine,
+        size: content.length,
+      };
     } catch (error) {
       return { error: `Could not read file: ${error instanceof Error ? error.message : 'Unknown error'}`, path: filePath };
     }
@@ -318,11 +523,9 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
     }
 
     const fs = await import('fs');
-    const pathModule = await import('path');
-
     try {
       if (createDirs) {
-        const dir = pathModule.dirname(sandboxed.fullPath);
+        const dir = path.dirname(sandboxed.fullPath);
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(sandboxed.fullPath, content, 'utf-8');
@@ -357,7 +560,6 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
     newString = decode(newString);
 
     const fs = await import('fs');
-
     try {
       const content = fs.readFileSync(sandboxed.fullPath, 'utf-8');
       if (!content.includes(oldString)) {
@@ -372,6 +574,297 @@ export const toolExecutors = new Map<string, (input: Record<string, unknown>) =>
       return { success: true, path: sandboxed.safe, replaced: 1 };
     } catch (error) {
       return { error: `Could not edit file: ${error instanceof Error ? error.message : 'Unknown error'}`, path: filePath };
+    }
+  }],
+
+  ['glob', async (input) => {
+    const pattern = input.pattern as string;
+    const searchPath = (input.path as string) || '.';
+    console.log(`[Tool:glob] Pattern: "${pattern}" in ${searchPath}`);
+
+    const sandboxed = sandboxPath(searchPath);
+    if ('error' in sandboxed) return { error: sandboxed.error };
+
+    const fs = await import('fs');
+    const stat = await fs.promises.stat(sandboxed.fullPath).catch(() => null);
+    if (!stat || !stat.isDirectory()) {
+      return { error: `Path is not a directory: ${searchPath}` };
+    }
+
+    const regex = globToRegex(pattern);
+    const maxResults = 100;
+    const files = await walkDir(sandboxed.fullPath, regex, sandboxed.fullPath, maxResults);
+
+    return {
+      pattern,
+      path: searchPath,
+      files,
+      total: files.length,
+      truncated: files.length >= maxResults,
+    };
+  }],
+
+  ['grep', async (input) => {
+    const pattern = input.pattern as string;
+    const searchPath = (input.path as string) || '.';
+    const include = input.include as string | undefined;
+    const contextLines = (input.context as number) || 2;
+    console.log(`[Tool:grep] Pattern: "${pattern}" in ${searchPath}${include ? ` (include: ${include})` : ''}`);
+
+    const sandboxed = sandboxPath(searchPath);
+    if ('error' in sandboxed) return { error: sandboxed.error };
+
+    const fs = await import('fs');
+    const stat = await fs.promises.stat(sandboxed.fullPath).catch(() => null);
+    if (!stat) return { error: `Path not found: ${searchPath}` };
+    if (!stat.isDirectory()) {
+      // Search single file
+      try {
+        const content = fs.readFileSync(sandboxed.fullPath, 'utf-8');
+        const lines = content.split('\n');
+        const regex = new RegExp(pattern, 'i');
+        const matches: { file: string; line: number; content: string; context?: string }[] = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (regex.test(lines[i])) {
+            const contextStart = Math.max(0, i - contextLines);
+            const contextEnd = Math.min(lines.length - 1, i + contextLines);
+            matches.push({
+              file: sandboxed.safe,
+              line: i + 1,
+              content: lines[i].trim(),
+              context: lines.slice(contextStart, contextEnd + 1).map((l, idx) => `${contextStart + idx + 1}: ${l}`).join('\n'),
+            });
+          }
+        }
+        return { pattern, path: searchPath, matches, total: matches.length };
+      } catch (error) {
+        return { error: `Could not read file: ${error instanceof Error ? error.message : 'Unknown error'}` };
+      }
+    }
+
+    const includeRegex = include ? globToRegex(include) : null;
+    const searchRegex = new RegExp(pattern, 'i');
+    const maxResults = 50;
+    const matches = await searchFiles(sandboxed.fullPath, searchRegex, includeRegex, contextLines, maxResults);
+
+    return {
+      pattern,
+      path: searchPath,
+      matches,
+      total: matches.length,
+      truncated: matches.length >= maxResults,
+    };
+  }],
+
+  ['list_directory', async (input) => {
+    const dirPath = (input.path as string) || '.';
+    console.log(`[Tool:list_directory] Listing: ${dirPath}`);
+
+    const sandboxed = sandboxPath(dirPath);
+    if ('error' in sandboxed) return { error: sandboxed.error };
+
+    const fs = await import('fs');
+    try {
+      const entries = fs.readdirSync(sandboxed.fullPath, { withFileTypes: true });
+      const listing = entries
+        .filter(entry => !entry.name.startsWith('.'))
+        .map(entry => ({
+          name: entry.name,
+          type: entry.isDirectory() ? 'directory' : 'file',
+          path: path.relative(WORKSPACE_ROOT, path.join(sandboxed.fullPath, entry.name)),
+        }))
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+      return { path: dirPath, entries: listing, total: listing.length };
+    } catch (error) {
+      return { error: `Could not list directory: ${error instanceof Error ? error.message : 'Unknown error'}` };
+    }
+  }],
+
+  ['web_search', async (input) => {
+    const query = input.query as string;
+    const numResults = (input.numResults as number) || 5;
+    console.log(`[Tool:web_search] Query: "${query}", numResults: ${numResults}`);
+
+    const apiKey = process.env.BRAVE_SEARCH_API_KEY || process.env.WEB_SEARCH_API_KEY;
+    const provider = (process.env.WEB_SEARCH_PROVIDER || 'brave').toLowerCase();
+
+    // Try real search providers
+    if (apiKey && provider === 'brave') {
+      try {
+        const response = await fetch(
+          `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${numResults}`,
+          { headers: { 'X-Subscription-Token': apiKey } },
+        );
+        if (response.ok) {
+          const data = await response.json() as { web?: { results?: Array<{ title?: string; description?: string; url?: string }> } };
+          const results = (data.web?.results || []).map((r) => ({
+            title: r.title || 'Untitled',
+            snippet: r.description || '',
+            url: r.url || '',
+          }));
+          return { query, results, totalFound: results.length, provider: 'brave' };
+        }
+      } catch {
+        // Fall through to error message
+      }
+    }
+
+    if (apiKey && provider === 'serpapi') {
+      try {
+        const response = await fetch(
+          `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&num=${numResults}&api_key=${apiKey}`,
+        );
+        if (response.ok) {
+          const data = await response.json() as { organic_results?: Array<{ title?: string; snippet?: string; link?: string }> };
+          const results = (data.organic_results || []).map((r) => ({
+            title: r.title || 'Untitled',
+            snippet: r.snippet || '',
+            url: r.link || '',
+          }));
+          return { query, results, totalFound: results.length, provider: 'serpapi' };
+        }
+      } catch {
+        // Fall through to error message
+      }
+    }
+
+    // No provider configured
+    return {
+      query,
+      results: [],
+      totalFound: 0,
+      error: 'Web search requires a search provider. Set BRAVE_SEARCH_API_KEY (for Brave Search) or WEB_SEARCH_API_KEY + WEB_SEARCH_PROVIDER=serpapi in your .env file.',
+      hint: 'For Brave Search, get an API key at https://brave.com/search/api/. For SerpAPI, visit https://serpapi.com/.',
+    };
+  }],
+
+  ['web_fetch', async (input) => {
+    const url = input.url as string;
+    const prompt = (input.prompt as string) || 'Extract the main content from this page';
+    console.log(`[Tool:web_fetch] URL: ${url}`);
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'TeamForge/1.0 (Research Agent)',
+          'Accept': 'text/html,application/json,text/plain',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!response.ok) {
+        return { error: `HTTP ${response.status}: ${response.statusText}`, url };
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      const body = await response.text();
+
+      // Strip HTML to plain text for HTML responses
+      let content: string;
+      if (contentType.includes('text/html')) {
+        content = body
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+          .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+          .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\s+/g, ' ')
+          .trim();
+      } else {
+        content = body;
+      }
+
+      // Truncate if too long
+      const maxChars = 10000;
+      const truncated = content.length > maxChars;
+      content = content.substring(0, maxChars);
+
+      return {
+        url,
+        content,
+        truncated,
+        totalChars: content.length + (truncated ? content.length - maxChars : 0),
+        contentType,
+      };
+    } catch (error) {
+      return { error: `Failed to fetch URL: ${error instanceof Error ? error.message : 'Unknown error'}`, url };
+    }
+  }],
+
+  ['ask_user', async (input) => {
+    const question = input.question as string;
+    const options = (input.options as string[]) || undefined;
+    const agentId = (input._agentId as string) || 'unknown';
+
+    // Import dynamically to avoid circular dependency
+    const { requestUserQuestion } = await import('../question');
+    const result = await requestUserQuestion({
+      agentId,
+      question,
+      options,
+    });
+
+    return {
+      question,
+      answer: result.answer,
+      answered: true,
+    };
+  }],
+
+  ['analyze_data', async (input) => {
+    const data = input.data as string;
+    const question = input.question as string;
+    console.log(`[Tool:analyze_data] Analyzing ${data.length} chars for: "${question.substring(0, 80)}"`);
+
+    const apiKey = process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return {
+        data: data.substring(0, 2000),
+        question,
+        error: 'ANTHROPIC_API_KEY not configured. Cannot perform LLM-based analysis.',
+      };
+    }
+
+    try {
+      const client = createAnthropicClient(apiKey);
+      const response = await client.messages.create({
+        model: FAST_MODEL,
+        max_tokens: 2000,
+        system: 'You are a data analyst. Analyze the provided data and answer the user\'s question. Be specific, structured, and actionable. Use markdown formatting for clarity.',
+        messages: [
+          {
+            role: 'user',
+            content: `## Data\n\`\`\`\n${data.substring(0, 8000)}\n\`\`\`\n\n## Question\n${question}`,
+          },
+        ],
+      });
+
+      const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
+      return {
+        question,
+        analysis: textBlock?.text || 'No analysis generated',
+        dataProvided: data.length,
+        dataTruncated: data.length > 8000,
+        model: FAST_MODEL,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      };
+    } catch (error) {
+      return {
+        data: data.substring(0, 2000),
+        question,
+        error: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
     }
   }],
 
@@ -426,10 +919,12 @@ export function getToolsForAgent(agentId: string): {
   executors: Map<string, (input: Record<string, unknown>) => Promise<Record<string, unknown>>>;
 } {
   const agent = predefinedAgents.find(a => a.id === agentId);
-  const agentTools = agent?.tools || ['web_search', 'analyze_data'];
+  const agentTools = agent?.tools || ['bash', 'file_read', 'web_search'];
 
   const definitions = toolDefinitions.filter(t => agentTools.includes(t.name));
-  const executors = new Map<string, (input: Record<string, unknown>) => Promise<Record<string, unknown>>>();
+  type ToolExecutor = (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  const executors = new Map<string, ToolExecutor>();
+
   for (const def of definitions) {
     const baseExecutor = toolExecutors.get(def.name);
     if (!baseExecutor) continue;
@@ -446,45 +941,4 @@ export function getToolsForAgent(agentId: string): {
   }
 
   return { definitions, executors };
-}
-
-// Helper: generate contextual search results
-function generateSearchResults(query: string, numResults: number) {
-  const topicKeywords = query.toLowerCase();
-  const results = [];
-
-  const templates = [
-    { domain: 'mckinsey.com', type: 'Industry Report' },
-    { domain: 'hbr.org', type: 'Analysis' },
-    { domain: 'statista.com', type: 'Market Data' },
-    { domain: 'reuters.com', type: 'News' },
-    { domain: 'gartner.com', type: 'Research' },
-    { domain: 'forbes.com', type: 'Business' },
-    { domain: 'techcrunch.com', type: 'Technology' },
-    { domain: 'bloomberg.com', type: 'Financial' },
-  ];
-
-  for (let i = 0; i < Math.min(numResults, templates.length); i++) {
-    const t = templates[i];
-    results.push({
-      title: `${t.type}: ${query.charAt(0).toUpperCase() + query.slice(1)} - Key Findings ${i > 0 ? `Part ${i + 1}` : ''}`,
-      snippet: `Comprehensive analysis of ${topicKeywords}. Data shows significant trends with ${30 + Math.floor(Math.random() * 40)}% growth projection and emerging opportunities in the sector.`,
-      url: `https://www.${t.domain}/research/${topicKeywords.replace(/\s+/g, '-')}`,
-      source: t.domain.split('.')[0],
-    });
-  }
-
-  return results;
-}
-
-// Helper: generate analysis insights
-function generateAnalysisInsights(dataType: string, query: string) {
-  const insights = [
-    `Strong growth trajectory identified in ${dataType} sector with estimated 28-34% CAGR over 3 years`,
-    `Key competitive advantages center around product differentiation and market positioning`,
-    `Data indicates potential for 2.5-4x ROI with strategic investment in target segments`,
-    `Regulatory environment is favorable with manageable compliance requirements`,
-    `Customer acquisition costs trending downward as brand awareness increases`,
-  ];
-  return insights.slice(0, 3 + Math.floor(Math.random() * 3));
 }

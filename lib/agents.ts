@@ -21,13 +21,13 @@ Available agents:
 - researcher (Alex Rivera): Web research, competitive analysis, market trends
 - analyst (Dr. Lena Chen): Financial modeling, data analysis, calculations, projections
 - writer (Marcus Hale): Content creation, strategy documents, go-to-market plans, executive summaries
-- visualizer (Sofia Patel): Charts, diagrams, data visualizations, image generation
+- visualizer (Sofia Patel): Charts, diagrams, data visualizations
 
 Always use the create_execution_plan tool to output your plan with clear subtasks, descriptions, and agent assignments.`,
     model: DEFAULT_MODEL,
     color: '#3b82f6',
     skills: ['planning', 'orchestration', 'synthesis', 'structured-output'],
-    tools: ['web_search', 'code_execution', 'analyze_data', 'remember', 'recall'],
+    tools: ['bash', 'file_read', 'file_write', 'file_edit', 'glob', 'grep', 'web_search', 'web_fetch', 'ask_user', 'analyze_data', 'remember', 'recall'],
     provider: 'anthropic',
     status: 'active',
     memorySize: 25,
@@ -59,7 +59,7 @@ Approach each research task methodically. Start broad, then drill into specifics
     model: DEFAULT_MODEL,
     color: '#10b981',
     skills: ['web-search', 'competitive-analysis', 'data-synthesis', 'source-verification'],
-    tools: ['web_search', 'analyze_data', 'remember', 'recall'],
+    tools: ['web_search', 'web_fetch', 'file_read', 'glob', 'grep', 'ask_user', 'analyze_data', 'remember', 'recall'],
     provider: 'anthropic',
     status: 'active',
     memorySize: 40,
@@ -73,7 +73,7 @@ Approach each research task methodically. Start broad, then drill into specifics
     systemPrompt: `You are Dr. Lena Chen, a senior financial analyst and data scientist. Your goal is to provide rigorous quantitative analysis, financial modeling, and data-driven insights.
 
 Guidelines:
-- Use code_execution for calculations, financial projections, and quantitative analysis
+- Use bash for calculations, financial projections, and quantitative analysis
 - Use analyze_data to process datasets and identify patterns
 - Use remember to save key findings and models for future reference
 - Use recall to retrieve previous analysis results
@@ -85,7 +85,7 @@ Always show your work — explain methodology, state assumptions, and quantify u
     model: DEFAULT_MODEL,
     color: '#8b5cf6',
     skills: ['financial-modeling', 'data-analysis', 'statistical-analysis', 'projection-forecasting'],
-    tools: ['code_execution', 'analyze_data', 'remember', 'recall'],
+    tools: ['bash', 'file_read', 'file_write', 'glob', 'grep', 'analyze_data', 'ask_user', 'remember', 'recall'],
     provider: 'anthropic',
     status: 'active',
     memorySize: 30,
@@ -112,7 +112,7 @@ Your deliverables should be publication-ready — clear, concise, and compelling
     model: DEFAULT_MODEL,
     color: '#f59e0b',
     skills: ['copywriting', 'strategy-development', 'presentation-design', 'executive-communication'],
-    tools: ['web_search', 'analyze_data', 'remember', 'recall'],
+    tools: ['web_search', 'web_fetch', 'file_read', 'file_write', 'file_edit', 'ask_user', 'remember', 'recall'],
     provider: 'anthropic',
     status: 'active',
     memorySize: 20,
@@ -126,8 +126,8 @@ Your deliverables should be publication-ready — clear, concise, and compelling
     systemPrompt: `You are Sofia Patel, a data visualization and design expert. Your goal is to create high-quality visual representations of data and concepts.
 
 Guidelines:
-- Use generate_image to create visual assets, charts, and diagrams
-- Use code_execution to generate structured data for visualizations
+- Use bash to generate data and run scripts for visualizations
+- Use file_write to create chart specifications and visual output
 - Use analyze_data to understand the data you're visualizing
 - Use remember to save design decisions and visual patterns
 - Use recall to retrieve previous visual styles and preferences
@@ -138,8 +138,8 @@ Guidelines:
 Your visual outputs should make complex information intuitive and actionable.`,
     model: DEFAULT_MODEL,
     color: '#ec4899',
-    skills: ['charting', 'image-generation', 'ui-design', 'dashboard-creation'],
-    tools: ['generate_image', 'analyze_data', 'code_execution', 'remember', 'recall'],
+    skills: ['charting', 'data-visualization', 'ui-design', 'dashboard-creation'],
+    tools: ['bash', 'file_read', 'file_write', 'analyze_data', 'ask_user', 'remember', 'recall'],
     provider: 'anthropic',
     status: 'active',
     memorySize: 15,
@@ -170,7 +170,7 @@ Always structure your brainstorming output as:
     model: DEFAULT_MODEL,
     color: '#06b6d4',
     skills: ['brainstorming', 'feature-analysis', 'project-assessment', 'ideation', 'strategic-thinking'],
-    tools: ['file_read', 'analyze_data', 'remember', 'recall', 'web_search'],
+    tools: ['file_read', 'glob', 'grep', 'list_directory', 'web_search', 'web_fetch', 'ask_user', 'analyze_data', 'remember', 'recall'],
     provider: 'anthropic',
     status: 'active',
     memorySize: 50,
@@ -185,46 +185,23 @@ Always structure your brainstorming output as:
 // Tool definitions (for UI reference — actual definitions are in lib/anthropic/tools.ts)
 export const availableTools: ToolDefinition[] = [
   {
-    name: 'web_search',
-    description: 'Search the web for information and return relevant results with sources',
+    name: 'bash',
+    description: 'Execute shell commands in the project workspace',
     parameters: z.object({
-      query: z.string(),
-      numResults: z.number().optional().default(5),
+      command: z.string(),
+      timeout: z.number().optional().default(30000),
     }),
-    execute: async () => ({ results: [], totalResults: 0 }),
-  },
-  {
-    name: 'code_execution',
-    description: 'Execute JavaScript code in a sandboxed environment for calculations and analysis',
-    parameters: z.object({
-      code: z.string(),
-      language: z.enum(['python', 'javascript']).default('javascript'),
-    }),
-    execute: async () => ({ output: '', success: true }),
-  },
-  {
-    name: 'generate_image',
-    description: 'Generate visual assets based on detailed descriptions',
-    parameters: z.object({
-      prompt: z.string(),
-      style: z.string().optional(),
-    }),
-    execute: async () => ({ imageUrl: '', alt: '' }),
-  },
-  {
-    name: 'analyze_data',
-    description: 'Analyze data and provide structured insights and recommendations',
-    parameters: z.object({
-      dataType: z.string(),
-      query: z.string(),
-    }),
-    execute: async () => ({ insights: [], summary: '' }),
+    execute: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
   },
   {
     name: 'file_read',
-    description: 'Read file contents from the project directory',
-    parameters: z.object({ path: z.string() }),
-    execute: async () => ({ content: '', lines: 0 }),
+    description: 'Read file contents with optional line range',
+    parameters: z.object({
+      path: z.string(),
+      offset: z.number().optional(),
+      limit: z.number().optional().default(2000),
+    }),
+    execute: async () => ({ content: '', totalLines: 0 }),
   },
   {
     name: 'file_write',
@@ -237,6 +214,68 @@ export const availableTools: ToolDefinition[] = [
     description: 'Edit a file by replacing old text with new text',
     parameters: z.object({ path: z.string(), old_string: z.string(), new_string: z.string() }),
     execute: async () => ({ success: true, replaced: 1 }),
+  },
+  {
+    name: 'glob',
+    description: 'Find files matching a glob pattern',
+    parameters: z.object({
+      pattern: z.string(),
+      path: z.string().optional(),
+    }),
+    execute: async () => ({ files: [], total: 0 }),
+  },
+  {
+    name: 'grep',
+    description: 'Search for a pattern across files',
+    parameters: z.object({
+      pattern: z.string(),
+      path: z.string().optional(),
+      include: z.string().optional(),
+      context: z.number().optional().default(2),
+    }),
+    execute: async () => ({ matches: [], total: 0 }),
+  },
+  {
+    name: 'list_directory',
+    description: 'List files and directories at a path',
+    parameters: z.object({ path: z.string().optional() }),
+    execute: async () => ({ entries: [], total: 0 }),
+  },
+  {
+    name: 'web_search',
+    description: 'Search the web for information and return relevant results with sources',
+    parameters: z.object({
+      query: z.string(),
+      numResults: z.number().optional().default(5),
+    }),
+    execute: async () => ({ results: [], totalFound: 0 }),
+  },
+  {
+    name: 'web_fetch',
+    description: 'Fetch content from a URL and extract the main text',
+    parameters: z.object({
+      url: z.string(),
+      prompt: z.string().optional(),
+    }),
+    execute: async () => ({ content: '', url: '' }),
+  },
+  {
+    name: 'ask_user',
+    description: 'Ask the user a question and wait for their response',
+    parameters: z.object({
+      question: z.string(),
+      options: z.array(z.string()).optional(),
+    }),
+    execute: async () => ({ answer: '' }),
+  },
+  {
+    name: 'analyze_data',
+    description: 'Analyze data using an LLM and return structured insights',
+    parameters: z.object({
+      data: z.string(),
+      question: z.string(),
+    }),
+    execute: async () => ({ analysis: '', question: '' }),
   },
   {
     name: 'remember',

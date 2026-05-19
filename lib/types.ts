@@ -83,6 +83,14 @@ export interface ApprovalRequest {
   input: Record<string, unknown>;
 }
 
+// User question from agent (emitted via SSE to client)
+export interface QuestionRequest {
+  id: string;
+  agentId: string;
+  question: string;
+  options?: string[];
+}
+
 // Global app settings (persisted to DB)
 export interface AppSettings {
   hitlEnabled: boolean;
@@ -92,7 +100,7 @@ export interface AppSettings {
 
 // New types for Anthropic agent events (SSE stream)
 export interface StreamEvent {
-  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'mission_complete' | 'plan_created' | 'tool_approval_request' | 'checkpoint_saved' | 'guardrail_flagged';
+  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'mission_complete' | 'plan_created' | 'tool_approval_request' | 'checkpoint_saved' | 'guardrail_flagged' | 'user_question';
   agentId: string;
   agentName?: string;
   content?: string;
@@ -105,4 +113,5 @@ export interface StreamEvent {
   approval?: ApprovalRequest;
   checkpoint?: { runId: string; iteration: number; timestamp: string };
   guardrail?: { type: string; message: string; severity: 'low' | 'medium' | 'high' };
+  question?: QuestionRequest;
 }

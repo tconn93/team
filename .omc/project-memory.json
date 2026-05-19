@@ -144,39 +144,39 @@
   },
   "hotPaths": [
     {
-      "path": "lib/anthropic/loop.ts",
-      "accessCount": 29,
-      "lastAccessed": 1779216942949,
-      "type": "file"
-    },
-    {
       "path": "lib/anthropic/tools.ts",
-      "accessCount": 24,
-      "lastAccessed": 1779217713829,
-      "type": "file"
-    },
-    {
-      "path": "lib/anthropic/agent-runner.ts",
-      "accessCount": 22,
-      "lastAccessed": 1779224264632,
-      "type": "file"
-    },
-    {
-      "path": "lib/store.ts",
-      "accessCount": 21,
-      "lastAccessed": 1779224108580,
+      "accessCount": 41,
+      "lastAccessed": 1779228408454,
       "type": "file"
     },
     {
       "path": "lib/agents.ts",
-      "accessCount": 17,
-      "lastAccessed": 1779216173800,
+      "accessCount": 32,
+      "lastAccessed": 1779228430557,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/loop.ts",
+      "accessCount": 31,
+      "lastAccessed": 1779226343633,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/agent-runner.ts",
+      "accessCount": 28,
+      "lastAccessed": 1779227059438,
+      "type": "file"
+    },
+    {
+      "path": "lib/store.ts",
+      "accessCount": 22,
+      "lastAccessed": 1779227067038,
       "type": "file"
     },
     {
       "path": "lib/anthropic/coordinator.ts",
-      "accessCount": 17,
-      "lastAccessed": 1779224181671,
+      "accessCount": 19,
+      "lastAccessed": 1779226338076,
       "type": "file"
     },
     {
@@ -198,15 +198,21 @@
       "type": "file"
     },
     {
-      "path": "app/api/orchestrator/route.ts",
-      "accessCount": 10,
-      "lastAccessed": 1779215183886,
+      "path": "lib/memawi.ts",
+      "accessCount": 12,
+      "lastAccessed": 1779226337575,
       "type": "file"
     },
     {
-      "path": "lib/memawi.ts",
+      "path": "lib/types.ts",
+      "accessCount": 11,
+      "lastAccessed": 1779227032252,
+      "type": "file"
+    },
+    {
+      "path": "app/api/orchestrator/route.ts",
       "accessCount": 10,
-      "lastAccessed": 1779220377624,
+      "lastAccessed": 1779215183886,
       "type": "file"
     },
     {
@@ -216,33 +222,27 @@
       "type": "file"
     },
     {
-      "path": "lib/types.ts",
-      "accessCount": 8,
-      "lastAccessed": 1779224029864,
-      "type": "file"
-    },
-    {
       "path": "components/SettingsModal.tsx",
       "accessCount": 8,
       "lastAccessed": 1779224234625,
       "type": "file"
     },
     {
-      "path": "app/page.tsx",
-      "accessCount": 6,
-      "lastAccessed": 1779213115454,
+      "path": "lib/anthropic/reviewer.ts",
+      "accessCount": 7,
+      "lastAccessed": 1779226065538,
       "type": "file"
     },
     {
       "path": "lib/anthropic/scout.ts",
-      "accessCount": 6,
-      "lastAccessed": 1779216126451,
+      "accessCount": 7,
+      "lastAccessed": 1779226066243,
       "type": "file"
     },
     {
-      "path": "lib/anthropic/reviewer.ts",
+      "path": "app/page.tsx",
       "accessCount": 6,
-      "lastAccessed": 1779216130798,
+      "lastAccessed": 1779213115454,
       "type": "file"
     },
     {
@@ -265,8 +265,8 @@
     },
     {
       "path": "lib/anthropic/client.ts",
-      "accessCount": 5,
-      "lastAccessed": 1779221552596,
+      "accessCount": 6,
+      "lastAccessed": 1779226337845,
       "type": "file"
     },
     {
@@ -276,15 +276,15 @@
       "type": "file"
     },
     {
-      "path": "lib/db.ts",
-      "accessCount": 4,
-      "lastAccessed": 1779224064611,
+      "path": "package.json",
+      "accessCount": 5,
+      "lastAccessed": 1779226321935,
       "type": "file"
     },
     {
-      "path": "package.json",
+      "path": "lib/db.ts",
       "accessCount": 4,
-      "lastAccessed": 1779224454185,
+      "lastAccessed": 1779224064611,
       "type": "file"
     },
     {

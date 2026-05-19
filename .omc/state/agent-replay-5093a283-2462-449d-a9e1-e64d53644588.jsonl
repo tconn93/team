@@ -16,3 +16,10 @@
 {"t":0,"agent":"ab2a547","agent_type":"unknown","event":"agent_stop","success":true}
 {"t":0,"agent":"a88bfc4","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
 {"t":0,"agent":"a88bfc4","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":48555}
+{"t":0,"agent":"a4df903","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a82cba2","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a2f8bb9","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a2f8bb9","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":58172}
+{"t":0,"agent":"a82cba2","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":234426}
+{"t":0,"agent":"a647a40","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a647a40","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":80110}

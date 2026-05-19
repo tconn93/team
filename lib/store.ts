@@ -307,6 +307,22 @@ export const useTeamForgeStore = create<TeamForgeState>((set, get) => {
             break;
           }
 
+          case 'user_question': {
+            if (event.question) {
+              const optionsStr = event.question.options
+                ? `\nOptions: ${event.question.options.join(', ')}`
+                : '';
+              addMessageToRun(runId, {
+                id: `msg-question-${Date.now()}`,
+                agentId: event.agentId,
+                role: 'system',
+                content: `❓ Question from agent: ${event.question.question}${optionsStr}`,
+                timestamp: new Date(),
+              });
+            }
+            break;
+          }
+
           case 'mission_complete': {
             let deliverables: unknown[] = [];
             let totalTokens = { input: 0, output: 0 };

@@ -88,7 +88,7 @@ export async function checkToolResult(
   apiKey?: string,
 ): Promise<GuardrailResult> {
   // Skip guardrail for read-only tools that rarely hallucinate
-  const readOnlyTools = ['file_read', 'remember', 'recall', 'web_search', 'analyze_data'];
+  const readOnlyTools = ['file_read', 'glob', 'grep', 'list_directory', 'remember', 'recall', 'web_search', 'web_fetch', 'ask_user', 'analyze_data'];
   if (readOnlyTools.includes(tool)) {
     return { flagged: false, severity: 'low' };
   }

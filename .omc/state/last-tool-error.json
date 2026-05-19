@@ -1,7 +1,7 @@
 {
-  "tool_name": "Read",
-  "tool_input_preview": "{\"file_path\":\"/mnt/c/Users/tyler/projects/team/next.config.ts\"}",
-  "error": "File does not exist. Note: your current working directory is /mnt/c/Users/tyler/projects/team. Did you mean next.config.mjs?",
-  "timestamp": "2026-05-19T18:25:55.284Z",
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"ls -d /mnt/c/Users/tyler/claude/src/tools/MonitorTool /mnt/c/Users/tyler/claude/src/tools/PushNotificationTool /mnt/c/Users/tyler/claude/src/tools/SendUserFileTool /mnt/c/Users/tyler/claud...",
+  "error": "Exit code 2\n/mnt/c/Users/tyler/claude/src/tools/McpAuthTool",
+  "timestamp": "2026-05-19T21:28:56.923Z",
   "retry_count": 1
 }
