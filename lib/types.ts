@@ -8,7 +8,7 @@ export interface Agent {
   provider?: 'openai' | 'anthropic' | 'xai' | 'google' | 'custom';
   color: string;
   skills: string[];
-  tools: string[]; // references to tool names
+  tools: string[];
   status: 'idle' | 'active' | 'offline';
   memorySize: number;
   guardrails?: {
@@ -44,14 +44,14 @@ export interface AgentMessage {
   content: string;
   timestamp: Date;
   toolCalls?: ToolCall[];
-  output?: any;
+  output?: unknown;
 }
 
 export interface ToolCall {
   id: string;
   name: string;
-  arguments: any;
-  result?: any;
+  arguments: unknown;
+  result?: unknown;
 }
 
 export interface Run {
@@ -64,12 +64,26 @@ export interface Run {
   cost: number;
   duration: number;
   createdAt: Date;
-  outputs?: any[];
+  outputs?: unknown[];
 }
 
 export interface ToolDefinition {
   name: string;
   description: string;
-  parameters: any; // Zod schema in practice
-  execute: (args: any) => Promise<any>;
+  parameters: unknown;
+  execute: (args: unknown) => Promise<unknown>;
+}
+
+// New types for Anthropic agent events (SSE stream)
+export interface StreamEvent {
+  type: 'agent_thinking' | 'tool_call' | 'tool_result' | 'agent_complete' | 'agent_error' | 'mission_complete' | 'plan_created';
+  agentId: string;
+  agentName?: string;
+  content?: string;
+  tool?: string;
+  input?: unknown;
+  result?: unknown;
+  tokens?: { input: number; output: number };
+  timestamp?: string;
+  plan?: ExecutionPlan;
 }

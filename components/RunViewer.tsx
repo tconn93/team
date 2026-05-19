@@ -54,9 +54,9 @@ const MessageBubble = ({ message, agents }: { message: AgentMessage; agents: any
           ))}
         </div>
         
-        {message.output && (
+        {message.output != null && (
           <div className="mt-3 text-xs bg-zinc-900 border border-zinc-700 p-3 rounded-xl font-mono overflow-auto max-h-48">
-            {JSON.stringify(message.output, null, 2)}
+            {typeof message.output === 'string' ? message.output : JSON.stringify(message.output, null, 2)}
           </div>
         )}
       </div>
@@ -141,30 +141,33 @@ export function RunViewer({ run }: RunViewerProps) {
         <div className="border-t border-zinc-800 bg-zinc-900 p-6">
           <div className="uppercase text-xs tracking-[1px] text-zinc-500 mb-4">GENERATED DELIVERABLES</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {outputs.map((output, index) => (
+            {outputs.map((output, index) => {
+              const out = output as { type?: string; title?: string; url?: string };
+              return (
               <div key={index} className="glass border border-zinc-700 rounded-2xl p-5">
                 <div className="text-sm text-white font-medium mb-3 flex items-center gap-2">
-                  {output.type === 'chart' && '📈'} 
-                  {output.type === 'image' && '🖼️'} 
-                  {output.type === 'table' && '📋'} 
-                  {output.title}
+                  {out.type === 'chart' && '📈'}
+                  {out.type === 'image' && '🖼️'}
+                  {out.type === 'table' && '📋'}
+                  {out.type === 'report' && '📄'}
+                  {out.title || 'Deliverable'}
                 </div>
-                
-                {output.type === 'image' && output.url && (
-                  <img 
-                    src={output.url} 
-                    alt={output.title}
+
+                {out.type === 'image' && out.url && (
+                  <img
+                    src={out.url}
+                    alt={out.title || 'Generated image'}
                     className="w-full rounded-xl border border-zinc-700"
                   />
                 )}
-                
-                {output.type === 'chart' && (
+
+                {out.type === 'chart' && (
                   <div className="h-64 bg-zinc-950 rounded-xl flex items-center justify-center border border-dashed border-zinc-700 text-xs text-zinc-500">
                     Interactive Recharts Line/Bar Chart would render here<br/>with real financial projections
                   </div>
                 )}
-                
-                {output.type === 'table' && (
+
+                {out.type === 'table' && (
                   <div className="text-xs font-mono text-emerald-300/70 bg-black/60 p-4 rounded-xl border border-emerald-900/30">
                     Competitor | Market Share | Strengths<br/>
                     Notion ••••••• 38% • Strong templates<br/>
@@ -173,7 +176,8 @@ export function RunViewer({ run }: RunViewerProps) {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

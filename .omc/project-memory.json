@@ -1,0 +1,448 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1779207433214,
+  "projectRoot": "/mnt/c/Users/tyler/projects/team",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "next",
+        "version": "15.2.4",
+        "category": "fullstack"
+      },
+      {
+        "name": "react",
+        "version": "19.0.0-rc-66855b96-20241106",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.0.0-rc-66855b96-20241106",
+        "category": "frontend"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build 2>&1 | tail -25",
+    "testCommand": "npm test",
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "next dev --turbopack",
+      "build": "next build",
+      "start": "next start",
+      "lint": "npx next lint",
+      "lint:fix": "npx next lint --fix",
+      "dev:fast": "next dev --turbopack",
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "type-check": "tsc --noEmit",
+      "clean": "rm -rf .next node_modules"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase",
+    "importStyle": "ES modules",
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "__tests__",
+      "app",
+      "components",
+      "lib"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [
+    {
+      "timestamp": 1779212122071,
+      "source": "manual",
+      "category": "architecture",
+      "content": "TeamForge revised to use Anthropic Messages API for all agent execution. Each subagent runs an autonomous \"goal mode\" agentic loop: receives a task, calls Anthropic API with tools, executes tool results, loops until done. Architecture: lib/anthropic/ (agent-runner.ts for goal mode, coordinator.ts for planning/delegation, tools.ts with remember/recall from Memawi, scout.ts for feature discovery, reviewer.ts for quality gate, loop.ts for always-on orchestrator). Memawi integration via lib/memawi.ts HTTP client. API routes: /api/run (SSE mission execution), /api/tasks (CRUD task board), /api/orchestrator (cycle/continuous/scout), /api/memory (Memawi proxy), /api/test-connection. Old lib/mastra/ removed."
+    }
+  ],
+  "directoryMap": {
+    "__tests__": {
+      "path": "__tests__",
+      "purpose": "Test files",
+      "fileCount": 2,
+      "lastAccessed": 1779207433187,
+      "keyFiles": [
+        "agents.test.js",
+        "agents.test.ts"
+      ]
+    },
+    "app": {
+      "path": "app",
+      "purpose": "Application code",
+      "fileCount": 4,
+      "lastAccessed": 1779207433191,
+      "keyFiles": [
+        "actions.ts",
+        "globals.css",
+        "layout.tsx",
+        "page.tsx"
+      ]
+    },
+    "components": {
+      "path": "components",
+      "purpose": "UI components",
+      "fileCount": 4,
+      "lastAccessed": 1779207433196,
+      "keyFiles": [
+        "AgentCard.tsx",
+        "AgentEditor.tsx",
+        "RunViewer.tsx",
+        "SettingsModal.tsx"
+      ]
+    },
+    "lib": {
+      "path": "lib",
+      "purpose": "Library code",
+      "fileCount": 6,
+      "lastAccessed": 1779207433200,
+      "keyFiles": [
+        "agents.ts",
+        "example-missions.ts",
+        "exampleMissions.ts",
+        "examples.ts",
+        "store.ts"
+      ]
+    },
+    "app/api": {
+      "path": "app/api",
+      "purpose": "API routes",
+      "fileCount": 0,
+      "lastAccessed": 1779207433208,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "lib/anthropic/loop.ts",
+      "accessCount": 29,
+      "lastAccessed": 1779216942949,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/tools.ts",
+      "accessCount": 18,
+      "lastAccessed": 1779214800314,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/agent-runner.ts",
+      "accessCount": 17,
+      "lastAccessed": 1779215634587,
+      "type": "file"
+    },
+    {
+      "path": "lib/agents.ts",
+      "accessCount": 17,
+      "lastAccessed": 1779216173800,
+      "type": "file"
+    },
+    {
+      "path": "components/AgentEditor.tsx",
+      "accessCount": 16,
+      "lastAccessed": 1779216272367,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/coordinator.ts",
+      "accessCount": 14,
+      "lastAccessed": 1779216121727,
+      "type": "file"
+    },
+    {
+      "path": "components/RunViewer.tsx",
+      "accessCount": 12,
+      "lastAccessed": 1779209083743,
+      "type": "file"
+    },
+    {
+      "path": "lib/store.ts",
+      "accessCount": 12,
+      "lastAccessed": 1779215135499,
+      "type": "file"
+    },
+    {
+      "path": "app/api/orchestrator/route.ts",
+      "accessCount": 10,
+      "lastAccessed": 1779215183886,
+      "type": "file"
+    },
+    {
+      "path": ".env.example",
+      "accessCount": 8,
+      "lastAccessed": 1779216284027,
+      "type": "file"
+    },
+    {
+      "path": "lib/memawi.ts",
+      "accessCount": 8,
+      "lastAccessed": 1779216860035,
+      "type": "file"
+    },
+    {
+      "path": "app/page.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1779213115454,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/scout.ts",
+      "accessCount": 6,
+      "lastAccessed": 1779216126451,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/reviewer.ts",
+      "accessCount": 6,
+      "lastAccessed": 1779216130798,
+      "type": "file"
+    },
+    {
+      "path": "components/SettingsModal.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1779208866895,
+      "type": "file"
+    },
+    {
+      "path": "lib/types.ts",
+      "accessCount": 4,
+      "lastAccessed": 1779214771619,
+      "type": "file"
+    },
+    {
+      "path": "app/api/memory/route.ts",
+      "accessCount": 4,
+      "lastAccessed": 1779215721532,
+      "type": "file"
+    },
+    {
+      "path": "lib/llm/router.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779208801917,
+      "type": "file"
+    },
+    {
+      "path": "app/actions.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779208808930,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 3,
+      "lastAccessed": 1779208817948,
+      "type": "file"
+    },
+    {
+      "path": "lib/mastra/coordinator.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779208933339,
+      "type": "file"
+    },
+    {
+      "path": "lib/mastra/tools.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779208933632,
+      "type": "file"
+    },
+    {
+      "path": "lib/tasks.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779214893013,
+      "type": "file"
+    },
+    {
+      "path": "app/api/tasks/route.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779214951669,
+      "type": "file"
+    },
+    {
+      "path": "app/api/health/route.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779215089720,
+      "type": "file"
+    },
+    {
+      "path": "next.config.mjs",
+      "accessCount": 3,
+      "lastAccessed": 1779215188003,
+      "type": "file"
+    },
+    {
+      "path": "lib/anthropic/client.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779216094364,
+      "type": "file"
+    },
+    {
+      "path": "lib/context-optimizer.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779216139674,
+      "type": "file"
+    },
+    {
+      "path": "app/api/test-connection/route.ts",
+      "accessCount": 3,
+      "lastAccessed": 1779216209445,
+      "type": "file"
+    },
+    {
+      "path": "components/AgentCard.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779207900468,
+      "type": "file"
+    },
+    {
+      "path": "app/api/run/route.ts",
+      "accessCount": 2,
+      "lastAccessed": 1779214812933,
+      "type": "file"
+    },
+    {
+      "path": ".env",
+      "accessCount": 2,
+      "lastAccessed": 1779216313225,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1779207579763,
+      "type": "file"
+    },
+    {
+      "path": "lib/examples.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779207583802,
+      "type": "file"
+    },
+    {
+      "path": "lib/example-missions.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779207584471,
+      "type": "file"
+    },
+    {
+      "path": "lib/exampleMissions.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779207584694,
+      "type": "file"
+    },
+    {
+      "path": "app/layout.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779207586678,
+      "type": "file"
+    },
+    {
+      "path": "TODO.md",
+      "accessCount": 1,
+      "lastAccessed": 1779207588671,
+      "type": "file"
+    },
+    {
+      "path": "__tests__/agents.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779207594835,
+      "type": "file"
+    },
+    {
+      "path": "__tests__/agents.test.js",
+      "accessCount": 1,
+      "lastAccessed": 1779207594930,
+      "type": "file"
+    },
+    {
+      "path": "Dockerfile",
+      "accessCount": 1,
+      "lastAccessed": 1779207595081,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.json",
+      "accessCount": 1,
+      "lastAccessed": 1779207595590,
+      "type": "file"
+    },
+    {
+      "path": "TODO.md.bak",
+      "accessCount": 1,
+      "lastAccessed": 1779207597011,
+      "type": "file"
+    },
+    {
+      "path": "lib/db.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779214849943,
+      "type": "file"
+    },
+    {
+      "path": "lib/db-runs.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779215059060,
+      "type": "file"
+    },
+    {
+      "path": "app/api/db-init/route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779215099570,
+      "type": "file"
+    },
+    {
+      "path": "app/api/runs/route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779215121757,
+      "type": "file"
+    },
+    {
+      "path": "lib/models.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779216085869,
+      "type": "file"
+    },
+    {
+      "path": "app/api/config/route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779216229338,
+      "type": "file"
+    },
+    {
+      "path": "lib/task-files.ts",
+      "accessCount": 1,
+      "lastAccessed": 1779216886273,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

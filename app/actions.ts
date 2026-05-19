@@ -1,34 +1,19 @@
 'use server';
 
-import { TeamForgeCoordinator } from '@/lib/mastra/coordinator';
-import type { ApiKeyConfig } from '@/lib/llm/router';
-
 /**
- * Server Action: Runs a full mission using the Mastra-powered Coordinator
- * This runs entirely on the server, preventing any Node.js/Prisma modules from reaching the client bundle.
+ * Server actions are no longer the primary execution path.
+ * Mission execution now goes through the SSE endpoint at /api/run
+ * which uses the Anthropic Messages API directly.
+ *
+ * This file is kept for backwards compatibility but the real
+ * execution happens in lib/anthropic/ via the API route.
  */
-export async function runMissionServerAction(goal: string, apiKeys: ApiKeyConfig = {}) {
-  'use server';
-  
-  try {
-    const coordinator = new TeamForgeCoordinator('xai', 'grok-3-beta', apiKeys);
-    
-    const result = await coordinator.runMission(goal, (message: string) => {
-      // In a real implementation this could stream updates via Server Sent Events
-      console.log('[Coordinator Stream]:', message);
-    });
 
-    return {
-      success: true,
-      plan: result.plan,
-      summary: result.summary,
-      deliverables: result.deliverables || [],
-    };
-  } catch (error) {
-    console.error('Server Action failed:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-    };
-  }
+export async function runMissionServerAction(_goal: string, _apiKeys: Record<string, string> = {}) {
+  // Deprecated: mission execution now happens via /api/run SSE endpoint
+  // which streams events in real-time using the Anthropic Messages API
+  return {
+    success: false,
+    error: 'Use the /api/run endpoint for real-time mission execution via Anthropic Messages API',
+  };
 }

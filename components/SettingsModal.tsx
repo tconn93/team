@@ -41,20 +41,34 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
     setTestStatus(prev => ({ ...prev, [provider]: 'testing' }));
 
-    // Simulate connection test (in real implementation this would call the LLM router with a simple prompt)
-    setTimeout(() => {
-      const isSuccess = Math.random() > 0.2; // 80% success rate for demo
-      setTestStatus(prev => ({ 
-        ...prev, 
-        [provider]: isSuccess ? 'success' : 'error' 
-      }));
-      
-      if (isSuccess) {
-        setTimeout(() => {
-          setTestStatus(prev => ({ ...prev, [provider]: 'idle' }));
-        }, 2000);
+    try {
+      if (provider === 'anthropic') {
+        // Test Anthropic connection with a real API call
+        const response = await fetch('/api/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, apiKey: key }),
+        });
+        const data = await response.json();
+        setTestStatus(prev => ({
+          ...prev,
+          [provider]: data.success ? 'success' : 'error',
+        }));
+      } else {
+        // Other providers: basic validation
+        const isValid = key.length > 10;
+        setTestStatus(prev => ({
+          ...prev,
+          [provider]: isValid ? 'success' : 'error',
+        }));
       }
-    }, 1200);
+    } catch {
+      setTestStatus(prev => ({ ...prev, [provider]: 'error' }));
+    }
+
+    setTimeout(() => {
+      setTestStatus(prev => ({ ...prev, [provider]: 'idle' }));
+    }, 3000);
   };
 
   const toggleVisibility = (provider: Provider) => {
@@ -88,7 +102,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             return (
               <div key={provider.id} className="glass border border-zinc-700 rounded-3xl p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="font-semibold text-lg">{provider.name}</div>
+                  <div className="font-semibold text-lg">
+                    {provider.name}
+                    {provider.id === 'anthropic' && (
+                      <span className="ml-2 text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full align-middle">PRIMARY</span>
+                    )}
+                  </div>
                   {currentKey && (
                     <div className="flex items-center gap-2 text-xs px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full">
                       <CheckCircle className="w-3 h-3" /> Configured
@@ -138,7 +157,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </div>
                 
                 <p className="text-[10px] text-zinc-500 mt-4">
-                  Keys are stored locally in your browser. Get keys from the provider dashboards.
+                  {provider.id === 'anthropic'
+                    ? 'Required for agent execution. Get your key from console.anthropic.com'
+                    : 'Keys are stored locally in your browser. Get keys from the provider dashboards.'}
                 </p>
               </div>
             );

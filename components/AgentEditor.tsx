@@ -14,10 +14,18 @@ interface AgentEditorProps {
 }
 
 const availableTools = [
-  'web_search', 'code_execution', 'generate_image', 'analyze_data'
+  'web_search', 'code_execution', 'generate_image', 'analyze_data', 'remember', 'recall'
 ];
 
 const defaultColors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#ef4444'];
+
+// Fetch server-side model config on mount
+let cachedDefaultModel = 'claude-sonnet-4-20250514';
+if (typeof window !== 'undefined') {
+  fetch('/api/config').then(r => r.json()).then(data => {
+    if (data?.models?.default) cachedDefaultModel = data.models.default;
+  }).catch(() => {});
+}
 
 function getDefaultFormData(): Partial<Agent> {
   return {
@@ -25,9 +33,9 @@ function getDefaultFormData(): Partial<Agent> {
     name: '',
     role: '',
     description: '',
-    systemPrompt: 'You are a helpful specialized agent. Think step by step and use your tools effectively.',
-    model: 'grok-3-beta',
-    provider: 'xai',
+    systemPrompt: 'You are a helpful specialized agent. Think step by step and use your tools effectively. Work autonomously until you have fully addressed the task, then provide a clear, detailed response.',
+    model: cachedDefaultModel,
+    provider: 'anthropic',
     color: defaultColors[Math.floor(Math.random() * defaultColors.length)],
     skills: [],
     tools: ['web_search'],
@@ -35,7 +43,7 @@ function getDefaultFormData(): Partial<Agent> {
     memorySize: 32,
     isCustom: true,
     guardrails: {
-      maxTokens: 16000,
+      maxTokens: 4096,
       maxCost: 10,
       requireApproval: false,
     },
@@ -51,10 +59,10 @@ function agentToFormState(agent: Agent): Partial<Agent> {
   };
 }
 
-// Popular models per provider (can be fetched dynamically via API in future)
+// Models per provider — Anthropic is the primary execution engine
 const modelOptions: Record<Provider, string[]> = {
+  anthropic: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
   openai: ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o3-mini'],
-  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-5-haiku-20241022'],
   xai: ['grok-3-beta', 'grok-2-1212', 'grok-2-vision-1212'],
   google: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash-exp'],
 };
@@ -216,7 +224,7 @@ export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
                       ...formData, 
                       provider: newProvider,
                       // Auto-select first available model for the provider
-                      model: modelOptions[newProvider]?.[0] || 'grok-3-beta'
+                      model: modelOptions[newProvider]?.[0] || cachedDefaultModel
                     });
                   }}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 focus:outline-none focus:border-blue-500"
@@ -344,7 +352,8 @@ export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
 
           {/* System Prompt */}
           <div>
-            <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-3">SYSTEM PROMPT</label>
+            <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-1">SYSTEM PROMPT</label>
+            <p className="text-[10px] text-zinc-500 mb-3">Define the agent&apos;s behavior, expertise, and instructions. Edit freely — this is how you control how each agent thinks and acts.</p>
             <textarea
               value={formData.systemPrompt}
               onChange={(e) => setFormData({ ...formData, systemPrompt: e.target.value })}
@@ -352,7 +361,7 @@ export function AgentEditor({ agent, isOpen, onClose }: AgentEditorProps) {
               placeholder="You are an expert..."
               required
             />
-            <p className="text-[10px] text-zinc-500 mt-3">Be specific. This defines the agent's personality, expertise, and behavior.</p>
+            <p className="text-[10px] text-zinc-500 mt-3">Be specific. This defines the agent&apos;s personality, expertise, and behavior.</p>
           </div>
         </form>
 

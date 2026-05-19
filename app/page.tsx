@@ -334,11 +334,11 @@ export default function TeamForge() {
 
             <div className="mt-auto pt-8">
               <div className="text-xs text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-4">
-                This is a fully functional simulation of a production multi-agent orchestration system.<br/><br/>
-                
-                The Coordinator dynamically creates structured plans, deploys parallel agents with real tool calling simulation, streams thoughts, and produces rich deliverables (charts, images, reports).<br/><br/>
-                
-                Built as a demonstration of what a production TeamForge / Hyperagent product could look like using Next.js, TypeScript, Zustand, and Vercel AI SDK patterns.
+                Multi-agent orchestration powered by Anthropic&apos;s Messages API.<br/><br/>
+
+                Each subagent runs an autonomous goal-mode loop — receiving a task, calling tools via the Anthropic API, and iterating until completion. The Coordinator plans and delegates using Claude, then synthesizes results.<br/><br/>
+
+                Built with Next.js, TypeScript, Zustand, and the Anthropic SDK.
               </div>
             </div>
           </div>

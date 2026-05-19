@@ -34,7 +34,9 @@ const providerFactories = {
 } as const;
 
 /**
- * Unified LLM Router
+ * Unified LLM Router — creates a Vercel AI SDK model instance for a given provider/model.
+ * Used primarily for model listing in the Agent Editor.
+ * Actual agent execution uses the Anthropic Messages API directly (lib/anthropic/).
  */
 export function getLLM(provider: Provider, model: string, apiKeys: ApiKeyConfig = {}): LanguageModelV1 {
   const factory = providerFactories[provider];
@@ -50,75 +52,31 @@ export function getLLM(provider: Provider, model: string, apiKeys: ApiKeyConfig 
     case 'anthropic':
     case 'xai':
     case 'google':
-      return instance(model as any);
+      return instance(model as never);
     default:
       throw new Error(`Model selection not implemented for provider ${provider}`);
   }
 }
 
-/**
- * Generate structured execution plan (mock for now - replace with real LLM call)
- */
-export async function generateStructuredPlan(
-  goal: string, 
-  provider: Provider = 'xai', 
-  model: string = 'grok-3-beta',
-  apiKeys: ApiKeyConfig = {}
-) {
-  console.log(`[LLM Router] Generating plan with ${provider}/${model} for goal: ${goal.substring(0, 60)}...`);
-  
-  return {
-    id: 'plan-' + Date.now(),
-    goal,
-    subtasks: [
-      {
-        id: 't1',
-        title: 'Comprehensive Research Phase',
-        description: 'Gather market data, competitor analysis, regulatory requirements using web tools.',
-        assignedAgent: 'researcher',
-        status: 'pending' as const,
-        estimatedTime: 25,
-      },
-      {
-        id: 't2',
-        title: 'Financial Modeling & Projections',
-        description: 'Build comprehensive 3-year financial projections.',
-        assignedAgent: 'analyst',
-        status: 'pending' as const,
-        estimatedTime: 30,
-      },
-      {
-        id: 't3',
-        title: 'Go-to-Market Strategy Development',
-        description: 'Develop detailed GTM plan including positioning and pricing.',
-        assignedAgent: 'writer',
-        status: 'pending' as const,
-        estimatedTime: 20,
-      },
-    ],
-    estimatedCost: 12.45,
-    createdAt: new Date(),
-  };
-}
-
-// Zod schema for structured plan output
+// Zod schema for structured plan output (used by coordinator via Anthropic Messages API)
 export const ExecutionPlanSchema = z.object({
   goal: z.string(),
   subtasks: z.array(z.object({
+    id: z.string(),
     title: z.string(),
     description: z.string(),
     assignedAgent: z.string(),
-    estimatedTime: z.number(),
+    dependencies: z.array(z.string()).optional(),
   })),
-  estimatedCost: z.number(),
+  strategy: z.string().optional(),
 });
 
 /**
- * Dynamically fetches available models from a provider's /v1/models endpoint (or equivalent).
- * Supports real API calls for OpenAI, Anthropic, xAI. Falls back gracefully.
+ * Dynamically fetches available models from a provider's /v1/models endpoint.
+ * Falls back to static lists on error.
  */
 export async function listModels(
-  provider: Provider, 
+  provider: Provider,
   apiKey?: string
 ): Promise<string[]> {
   const baseHeaders = {
@@ -134,17 +92,17 @@ export async function listModels(
       case 'xai':
         url = 'https://api.x.ai/v1/models';
         headers.Authorization = `Bearer ${apiKey}`;
-        filterFn = (model: any) => 
-          model.id?.toLowerCase().includes('grok') && 
+        filterFn = (model: any) =>
+          model.id?.toLowerCase().includes('grok') &&
           !model.id?.toLowerCase().includes('vision');
         break;
 
       case 'openai':
         url = 'https://api.openai.com/v1/models';
         headers.Authorization = `Bearer ${apiKey}`;
-        filterFn = (model: any) => 
-          model.id?.startsWith('gpt-') || 
-          model.id?.startsWith('o1-') || 
+        filterFn = (model: any) =>
+          model.id?.startsWith('gpt-') ||
+          model.id?.startsWith('o1-') ||
           model.id?.startsWith('o3-');
         break;
 
@@ -173,7 +131,7 @@ export async function listModels(
     }
 
     const data = await response.json();
-    
+
     let models: any[] = [];
     if (provider === 'anthropic') {
       models = data.models || [];
@@ -196,8 +154,13 @@ export async function listModels(
 
 function getStaticFallback(provider: Provider): string[] {
   const fallbacks: Record<Provider, string[]> = {
-    openai: ['gpt-4o', 'gpt-4o-mini', 'o1-preview'],
-    anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
+    openai: ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o3-mini'],
+    anthropic: [
+      'claude-sonnet-4-20250514',
+      'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku-20241022',
+      'claude-3-opus-20240229',
+    ],
     xai: ['grok-3-beta', 'grok-2-1212'],
     google: ['gemini-1.5-pro', 'gemini-1.5-flash'],
   };

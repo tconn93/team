@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   
   // Server-only packages (Prisma, Mastra, etc.) - moved from experimental in Next.js 15.2+
-  serverExternalPackages: ['mastra', '@mastra/core', '@prisma/client', 'prisma'],
+  serverExternalPackages: ['mastra', '@mastra/core', '@prisma/client', 'prisma', 'pg'],
 
   webpack: (config, { isServer }) => {
     if (!isServer) {
